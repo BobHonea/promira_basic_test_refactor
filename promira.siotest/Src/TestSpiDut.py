@@ -6,7 +6,7 @@ import promira_py as pm
 import eeprom
 import test_utility as utility
 import spi_io
-import spi_configuration as spicfg
+import spi_config_mgr as cfgmgr
 import promactive_msg as spimsg 
 import cmd_protocol as protocol
 #import os

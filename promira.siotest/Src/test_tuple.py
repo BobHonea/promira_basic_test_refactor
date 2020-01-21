@@ -40,7 +40,7 @@ class spi_configure:
   address_offsets = [0, 0x1000, 0x2000, 0x30000]
   target_vdds     = [3.3]
 
-  spi_configuration=coll.namedtuple('spi_configuration', 'clk_mode bit_order clk_kHz address_offset target_vdd' )
+  spi_configuration=coll.namedtuple('py', 'clk_mode bit_order clk_kHz address_offset target_vdd' )
 
   spi_config_ranges=spi_configuration( clk_mode=spi_clock_modes,
                                       bit_order=bit_orders,
