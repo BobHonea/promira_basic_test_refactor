@@ -1,0 +1,106 @@
+import random
+from builtins import None
+
+class testUtil:
+
+  m_randarray_count = 16  # arbitrary number
+  m_random_page_array_index = 0
+  m_random_page_array_list = []
+  m_page_size=None
+  
+  def __init__(self, page_size=256):
+    random.seed(0)
+    if page_size 
+    self.build_random_page_arrays()
+    
+  def zeroedArray(self, array_size):
+      zero_array = pmact.array_u08(array_size)
+      return zero_array
+  
+  def randomizeList(self, reference_list):
+    element_count=len(reference_list)
+    if element_count<=1:
+      # NULL and Single Item List already Randomized
+      return reference_list
+    
+    ordinals=[None]*element_count
+    reorder_indices=[]
+    
+    for index in range(element_count):
+      test_index=random.randint(0,element_count)
+      if ordinals[test_index]==test_index:
+        continue
+      else:
+        ordinals[test_index]=test_index
+        reorder_indices.append[test_index]
+        
+      if len(reorder_indices)==element_count:
+        break
+      
+      
+      reordered_list=[None]*element_count
+      for index in reorder_list:
+        reordered_list[index]=reference_list[reorder_indices[index]]
+        
+      return reordered_list
+    pass
+  
+  def generateRandomArray(self, array_size):
+      rand_array = pmact.array_u08(array_size)
+      for index in range(1, array_size):
+        rand_array[index] = random.randint(0, 255)
+        
+      return rand_array
+    
+
+  def buildRandomPageArrays(self):
+      self.m_random_page_array_list = []
+      for index in range(self.m_randarray_count):
+          self.m_random_page_array_list.append(self.generateRandomArray(self.m_page_size))
+          array_label = "Random Page Array #%02X:" % index
+          # self.printArrayHexDump(array_label, self.m_random_page_array_list[index])
+          
+  
+  def nextRandomPageArray(self):
+      self.m_random_page_array_index = (self.m_random_page_array_index + 1) % self.m_randarray_count
+      return self.m_random_page_array_list[self.m_random_page_array_index]
+
+
+  def printArrayHexDump(self, label, data_array=None):
+    
+    if data_array == None or len(data_array) == 0:
+      print("Hexdump:  array is empty")
+      return
+    
+    bytes_per_line = 32
+    print(label + " [ %03X bytes ]")
+    array_size = len(data_array)
+    array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
+    dump_bytes = array_size
+    dump_index = 0
+    for line in range(array_lines):
+      linestart = line * bytes_per_line
+      linestring = " %02X : " % linestart
+      if dump_bytes >= bytes_per_line:
+        line_bytes = bytes_per_line
+      else:
+        line_bytes = dump_bytes
+        
+      for dump_index in range(dump_index, dump_index + line_bytes):
+        value = data_array[dump_index]
+        linestring = linestring + " %02X" % value
+      print(linestring)
+ 
+ 
+  def cmpArray(self, array_a, array_b):
+    match=false
+    if len(array_a) == len(array_b):
+      for index in range (len(array_a)):
+        if array_a[index]==array_b[index]:
+          continue
+        else:
+          match=False
+          break
+    return match
+  
+  pass
