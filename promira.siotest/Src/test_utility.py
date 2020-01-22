@@ -1,17 +1,74 @@
 import random
-from builtins import None
+import sys
+import promact_is_py as pmact
+import spi_cfg_mgr as spicfg
+
+# Straightforward implementation of the Singleton Pattern
+
+class singletonInstantiator(object):
+    _instance = None
+    _testUtil = None
+    _configMgr= None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            print('Creating the object')
+            cls._instance = super(singletonInstantiator, cls).__new__(cls)
+            # Put any initialization here.
+        return cls._instance
+
+    def getTestUtil(self):
+      if self._testUtil==None:
+        self._testUtil=testUtil()
+      
+      return self._testUtil
+    
+    def getConfigMgr(self):
+      if self._configMgr==None:
+        self._configMgr=spicfg.configMgr()
+      
+      return self._configMgr
+
+
+
 
 class testUtil:
-
+  m_instantiated=False
   m_randarray_count = 16  # arbitrary number
   m_random_page_array_index = 0
   m_random_page_array_list = []
   m_page_size=None
+
+  _instance=None
   
-  def __init__(self, page_size=256):
+  def __new__(cls):
+      if cls._instance is None:
+          print('Creating the testUtil object')
+          cls._instance = super(testUtil, cls).__new__(cls)
+          cls.__singleton_init__(cls)
+      return cls._instance
+  
+  def __singleton_init__(self, page_size=256):
     random.seed(0)
-    if page_size 
-    self.build_random_page_arrays()
+
+  
+  def fatalError(self, reason):
+    print("Fatal : "+reason)
+    sys.exit()
+
+  def ipString(self, ip_integer):
+    integer=ip_integer
+    ipString_buf=""
+    
+    for index in range (0,4):
+      if index>0:
+        ipString_buf="."+ipString_buf
+      octet=int((ip_integer>>((3-index)*8))&0xff) 
+      integer>>=8
+      octet_string=format(octet, "d")
+      ipString_buf=octet_string+ipString_buf
+    return ipString_buf
+
     
   def zeroedArray(self, array_size):
       zero_array = pmact.array_u08(array_size)
@@ -39,7 +96,7 @@ class testUtil:
       
       
       reordered_list=[None]*element_count
-      for index in reorder_list:
+      for index in reordered_list:
         reordered_list[index]=reference_list[reorder_indices[index]]
         
       return reordered_list
@@ -93,7 +150,7 @@ class testUtil:
  
  
   def cmpArray(self, array_a, array_b):
-    match=false
+    match=False
     if len(array_a) == len(array_b):
       for index in range (len(array_a)):
         if array_a[index]==array_b[index]:

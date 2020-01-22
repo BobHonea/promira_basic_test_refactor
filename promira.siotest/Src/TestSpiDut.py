@@ -1,14 +1,7 @@
 """Py test that does a test function"""
 from __future__ import division, with_statement, print_function
-#import usertest
-import promact_is_py as pmact
-import promira_py as pm
-import eeprom
-import test_utility as utility
-import spi_io
-import spi_config_mgr as cfgmgr
-import promactive_msg as spimsg 
-import cmd_protocol as protocol
+
+
 #import os
 # import time
 # import subprocess
@@ -62,8 +55,15 @@ import cmd_protocol as protocol
 #==========================================================================
 # IMPORTS
 #==========================================================================
-
-import array
+import usertest
+import promact_is_py as pmact
+import promira_py as pm
+import eeprom
+import test_utility as testutil
+import spi_io
+import spi_cfg_mgr as spicfg
+import promactive_msg as pmmsg 
+import cmd_protocol as protocol
 import sys
 import time
 
@@ -81,50 +81,41 @@ INTERVAL_TIMEOUT = 500
 # FUNCTIONS
 #==========================================================================
 
+  
 
-
-def fatalError(reason):
-  print("Fatal Error : "+reason)
-  sys.exit()
-
-class promiraTestApp(usertest.SwUserTest):
+class promiraSpiTestApp(usertest.SwUserTest):
   """Unit test template"""
   
     
-  m_bus_type = BUSTYPE_UNKNOWN
-  m_eepromStatus = None
-
-  m_rxdata_array = pmact.array_u08(m_pkgsize)
-  m_txdata_array = pmact.array_u08(m_pkgsize)
-
-  m_random_page_array = pmact.array_u08(EEPROM_PAGE_SIZE)
-
-
-      
-
+  m_eepromStatus  = None
+  m_util          = None
+  m_spi_msg       = None
+  m_spiio         = None
+  m_config_mgr    = None
+  m_rxdata_array  = None
+  m_txdata_array  = None
+  m_random_page_array = None
+  m_pagesize      = None
+  m_eeprom        = None
+  m_instantiator  = None
   
   def __init__(self):
-    self.m_util     = utility.testUtil()
-    self.m_spi_msg  = spimsg.promact_messages()
-    self.m_eeprom   = eeprom.eeprom()
-    
-    self.m_spiio        = spi_io.spiIO(spi_io.spiIO.spi_config_00)
+    self.m_testutil     = testutil.testUtil()
     self.m_config_mgr   = spicfg.configMgr()
-    self.m_spi_protocol = protocol.spi_transaction()
-    
+        
+    self.m_spi_msg      = pmmsg.promactMessages()
+    self.m_eeprom       = eeprom.eeprom()
+    self.m_spiio        = spi_io.spiIO()
+
+    self.m_eeprom       = eeprom.eeprom()
+    self.m_pagesize     = eeprom.eeprom.EEPROM_PAGE_SIZE
+    self.m_rxdata_array       = pmact.array_u08(self.m_pagesize)
+    self.m_txdata_array       = pmact.array_u08(self.m_pagesize)
+    self.m_random_page_array  = pmact.array_u08(self.m_pagesize)
+    return
     
 
-  def apiIfError(self, result_code):
-    if result_code == pmact.PS_APP_OK or result_code>0:
-      return False 
-    
-    for error_id in self.PROMIRA_ERRORS:
-      if error_id[0] == result_code:
-        print(error_id[1])
-        return True
-    
-    print("unspecified API error")
-    return True
+
   
 
 
@@ -154,7 +145,7 @@ class promiraTestApp(usertest.SwUserTest):
 
     
     if not self.m_spiio.discoverDevice():
-      fatalError("Primira Spi Platform Connection Failure")
+      self.m_util.fatalError("Primira Spi Platform Connection Failure")
     
 
     self.m_spiio.initSpiMaster()
@@ -188,15 +179,15 @@ class promiraTestApp(usertest.SwUserTest):
       
       if not eeprom_unlocked:
         if self.eepromSpiReadProtectBitmap() == False:
-          fatalError("Protect Bitmap Read Failed")
+          self.m_util.fatalError("Protect Bitmap Read Failed")
           
         self.printArrayHexDump("Initial Protect Bitmap Array", self.m_eeprom_protect_bitmap)
         
         if self.eepromSpiGlobalUnlock() == False:
-          fatalError("Global Unlock Command Failed")
+          self.m_util.fatalError("Global Unlock Command Failed")
           
         if self.eepromSpiReadProtectBitmap() == False:
-          fatalError("Protect Bitmap Read Failed")
+          self.m_util.fatalError("Protect Bitmap Read Failed")
   
         sum = 0
     
@@ -206,7 +197,7 @@ class promiraTestApp(usertest.SwUserTest):
         eeprom_unlocked= (sum == 0)
            
         if not eeprom_unlocked:
-          #fatalError("Global Unlock Failed")
+          #self.m_util.fatalError("Global Unlock Failed")
           self.m_util.printArrayHexDump("Unlocked Protect Bitmap Array", self.m_eeprom_protect_bitmap)
     
           self.eeprom.m_eeprom_protect_bitmap=self.zeroed_u08_array(18)  
@@ -260,7 +251,7 @@ class promiraTestApp(usertest.SwUserTest):
         self.m_util.printArrayHexDump("EEProm Read", rxdata_array)
 
         if self.m_util.cmpArray(rxdata_array, txdata_array):
-          print("write/read compare failed)
+          print("write/read compare failed")
 
       
       time.sleep(2)

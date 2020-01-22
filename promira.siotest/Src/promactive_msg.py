@@ -92,6 +92,20 @@ class promactMessages:
     sys.exit()
     
     
+  def apiIfError(self, result_code):
+    if result_code == pmact.PS_APP_OK or result_code>0:
+      return False 
+    
+    for error_id in self.PROMACT_ERRORS:
+      if error_id[0] == result_code:
+        print(error_id[1])
+        return True
+    
+    print("unspecified API error")
+    return True
+  
+  
+    
   def appStatusString(self, app_status):
     return(pmact.ps_app_status_string(app_status))
   

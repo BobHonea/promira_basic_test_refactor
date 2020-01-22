@@ -1,3 +1,8 @@
+import array
+import test_utility as testutil
+import sys
+import promact_is_py as pmact
+
 class eeprom:
   
   EEPROM_PAGE_SIZE = 0x100
@@ -26,7 +31,12 @@ class eeprom:
   
   ENUMERATED_BLOCKS = []
   
+  m_testutil=None
+  
   def __init__(self):
+    self.m_instantiator = testutil.singletonInstantiator()
+    self.m_testutil     = self.m_instantiator.getTestUtil()
+
     self.enumerateBlocks()
 
   
@@ -98,15 +108,15 @@ class eeprom:
       self.m_eepromStatus = data_array[0]
       return self.m_eepromStatus
     
-    fatalError("ReadStatusRegister error")
+    self.m_testutil.fatalError("ReadStatusRegister error")
     return self.EESTATUS_READ_ERROR
     
   def eepromSpiReadData(self, read_address, read_length, read_array):
-    data_array=pmact.array_u08(read_length+10)
+
     data_in_length = self.spi_master_multimode_cmd(self.SPICMD_READ, read_address, read_length, read_array)
     if data_in_length==read_length:
       return True
-    fatalError("SpiReadData error")
+    self.m_testutil.fatalError("SpiReadData error")
 
   def eepromSpiReadDataDual(self, read_address, read_length, read_array):
 
@@ -114,13 +124,14 @@ class eeprom:
 
     if result_length==read_length:
       return True
-    fatalError("SpiReadDual error")    
+    self.m_testutil.fatalError("SpiReadDual error")    
 
 
 
   def eepromSpiWriteEnable(self):
     result_tuple = self.spi_master_multimode_cmd(self.SPICMD_WREN)
     return (result_tuple == 1)
+
   
   def eepromSpiReadProtectBitmap(self):
     self.m_eeprom_protect_bitmap = pmact.array_u08(18)
@@ -128,18 +139,18 @@ class eeprom:
     if data_in_length==18:
       return True
     else:
-      fatalError("Protect Bitmap Read fail")
+      self.m_testutil.fatalError("Protect Bitmap Read fail")
   
   def eepromSpiEraseSector(self, sector_address):
     if (sector_address & ~(self.EEPROM_SECTOR_SIZE-1)) != sector_address:
-      fatalError("sector address error")
+      self.m_testutil.fatalError("sector address error")
 
     self.eepromSpiWaitUntilNotBusy()
           
 
     result_length = self.spi_master_multimode_cmd(self.SPICMD_SE, sector_address)
-    #return(result_tuple[0] == 1)
     return True
+
       
   def eepromSpiUpdateWithinPage(self, write_address, write_length, write_array):
     # Update one page per function use
@@ -150,7 +161,7 @@ class eeprom:
     start_page = write_address // self.EEPROM_PAGE_SIZE
     end_page = (write_address + (write_length - 1)) // self.EEPROM_PAGE_SIZE
     if start_page != end_page:
-      fatalError("Page Write Spans Pages")
+      self.m_testutil.fatalError("Page Write Spans Pages")
       
     # Sector level check & Sector Erase + Page Write
     sector_size_mask = self.EEPROM_SECTOR_SIZE - 1
@@ -164,24 +175,28 @@ class eeprom:
       return False
     
     return True
+
   
   def eepromSpiWriteWithinPage(self, write_address, write_length, write_array):
     # Update one page per function use
     start_page = write_address // self.EEPROM_PAGE_SIZE
     end_page = (write_address + (write_length - 1)) // self.EEPROM_PAGE_SIZE
     if start_page != end_page:
-      fatalError("Page Write Spans Pages")
+      self.m_testutil.fatalError("Page Write Spans Pages")
 
     self.eepromSpiWaitUntilNotBusy()
     
     result_length =self.spi_master_multimode_cmd(self.SPICMD_PP, write_address, write_length, write_array)
     return (result_length == write_length)
 
+
   def eepromSpiGlobalUnlock(self):
     result_length = self.spi_master_multimode_cmd(self.SPICMD_ULBPR)
     if result_length==1:
       return True
-    fatalError("SpiGlobalUnlock error")
+    
+    self.m_testutil.fatalError("SpiGlobalUnlock error")
+  
   
   def eepromWriteProtectBitmap(self):
     if ( type(self.m_eeprom_protect_bitmap) == array.ArrayType and 
@@ -189,5 +204,6 @@ class eeprom:
       result_length = self.spi_master_multimode_cmd(self.SPICMD_WBPR, None, len(self.m_eeprom_protect_bitmap), self.m_eeprom_protect_bitmap)
       if result_length>=len(self.m_eeprom_protect_bitmap):
         return True
-    self.fatalError("protect bitmap write failure")
+      
+    self.m_testutil.fatalError("protect bitmap write failure")
   

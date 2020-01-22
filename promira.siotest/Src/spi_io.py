@@ -1,117 +1,18 @@
 
 import sys
- 
 import collections as coll
 import promact_is_py as pmact
 import promira_py as pm
+import promactive_msg as pm_msg
+import array
+import test_utility as testutil
+import spi_cfg_mgr as spicfg
+from spi_cfg_mgr import configMgr
 
- 
-class spi_io:
+
+
+class spiIO:
   
-  
-  BUSTYPE_UNKNOWN = 0
-  BUSTYPE_I2C = 1
-  BUSTYPE_SPI = 2
-  SPICLOCKMODE_0 = pmact.PS_SPI_MODE_0
-  SPICLOCKMODE_1 = pmact.PS_SPI_MODE_1
-  SPICLOCKMODE_2 = pmact.PS_SPI_MODE_2
-  SPICLOCKMODE_3 = pmact.PS_SPI_MODE_3
-  SPIBITORDER_MSB= pmact.PS_SPI_BITORDER_MSB
-  SPIBITORDER_LSB= pmact.PS_SPI_BITORDER_LSB
-  
-  '''
-  Chip Select Polarity Vector
-    one bit for each of 4 chip selects
-    1 = active high
-    0 = active low
-    bits 0..3 comprise the vector bits
-  '''
-  SPI_SS_ALL_ACTIVE_HIGH = 0x0F
-  SPI_SS_ALL_ACTIVE_LOW = 0x00
-  SPI_SS0_ACTIVE_HIGH=0x01
-  
-  class spi_configuration:
-
-
-    spi_configuration=coll.namedtuple('spi_configuration', 'clk_mode bit_order ss_polarity clk_kHz address_offset target_vdd' )
-
-    spi_config_ranges=spi_configuration( 
-      clk_mode      = [SPICLOCKMODE_0, SPICLOCKMODE_3],
-      #   unused_clkmodes = [SPICLOCKMODE_1, SPICLOCKMODE_2]
-      bit_order     = [SPIBITORDER_MSB],
-      ss_polarity   = [SPI_SS_ALL_ACTIVE_HIGH, SPI_SS_ALL_ACTIVE_LOW],
-      clk_kHz       = [1000, 6200, 12200, 18000, 23400, 28200, 32200, 35600],
-      address_offset= [0, 0x1000, 0x2000, 0x3000],
-      target_vdd    = [3.3])
-      #   unused vdd: 1.8
-
-    spi_config_list=[]
-    
-  
-    '''
-    traverse config list:
-      getconfig(index)
-      firstConfig()
-      nextConfig()
-          Config functions return spi_configuration namedtuple, or None if end of list
-         
-      configCount()  : valid after firstConfig()
-          Count of valid configurations
-    '''
-
-    def __init__(self):
-      self.spi_config_list=[]
-      self.genConfigs()
-
-
-    def getConfig(self, index):
-      if self.m_config_ndx<self.m_config_count:
-        return(self.spi_config_list[self.m_config_ndx])
-      else:
-        return None
-          
-    def firstConfig(self):
-      self.m_config_ndx=0
-      self.m_config_count=len(self.spi_config_list)
-      return self.getConfig(self.m_config_ndx)
-
-
-    def nextConfig(self):
-      self.m_config_ndx+=1
-      return self.getConfig(self.m_config_ndx)
-      
-    
-    def configCount(self):
-      return self.m_config_count
-  
-    def genConfigs(self):
-      
-      def fill_config_level(attrib_index):
-        
-        if attrib_index==-1:
-          self.config_item_list=[]
-          attrib_index+=1
-          fill_config_level(attrib_index)
-          return
-          
-        elif attrib_index==max_config_ndx:
-          # spi_config is defined, store it
-          spi_config_list.append(self.spi_configuration._make(self.config_item_list))
-          
-        else:
-          config_items=getattr(self.spi_config_ranges, self.spi_configuration._fields[attrib_index])
-          config_item_count=len(config_items)
-          for item_index in range(config_item_count):
-            this_value=config_items[item_index]
-            # begin recurse
-            self.config_item_list.append(this_value)    
-            fill_config_level(attrib_index+1) 
-            self.config_item_list=self.config_item_list[:-1]
-            # recurse end
-            
-      spi_config_list=[]
-      max_config_ndx=len(self.spi_configuration._fields)
-      fill_config_level(-1)
     
       
 
@@ -124,7 +25,7 @@ class spi_io:
   m_device_status   = None
 
   
-  m_spi_bitrate_khz = None
+  m_spi_clock_khz   = None
   m_spi_clock_mode  = None
   m_spi_ss_polarity = None
   
@@ -138,6 +39,10 @@ class spi_io:
   m_app_name        = "com.totalphase.promact_is"
   
   def __init__(self):
+    self.m_pm_msg   = pm_msg.promactMessages()
+    self.m_test_util= testutil.testUtil()    
+    self.m_cfg_mgr  = spicfg.configMgr()
+    
     self.m_ss_mask = 0x1
     self.m_device = None
     self.m_devices    = pmact.array_u16(4)
@@ -145,31 +50,19 @@ class spi_io:
     self.m_device_ips = pmact.array_u32(4)
     self.m_device_status = pmact.array_u32(4)
 
-    self.m_spiconfig = self.spi_configuration()
-    self.m_spi_configuration=self.m_spiconfig.firstConfig()
+    self.m_spi_configuration = self.m_cfg_mgr.firstConfig()
     self.m_timeout_ms = 1000  # arbitrary 10 second value 
 
+    self.discoverDevice()
+    
     self.initSpiMaster(self.m_device_ipString, self.m_spi_configuration )
 
   
   
   def selectSpiConfig(self, index=0):
     pass
+
  
-  def ipString(self, ip_integer):
-    integer=ip_integer
-    ipString_buf=""
-    
-    for index in range (0,4):
-      if index>0:
-        ipString_buf="."+ipString_buf
-      octet=int((ip_integer>>((3-index)*8))&0xff) 
-      integer>>=8
-      octet_string=format(octet, "d")
-      ipString_buf=octet_string+ipString_buf
-  
-  
-    return ipString_buf
  
   def discoverDevice(self, serial_number=None):
     self.m_port = 0  # default port for a single promira device
@@ -180,7 +73,7 @@ class spi_io:
     self.m_devices = return_tuple[2]
     self.m_device_ids = return_tuple[3]
     print("device_count:" + str(device_count))
-    self.m_device_ipString=self.ipString(self.m_device_ips[0])
+    self.m_device_ipString=self.m_test_util.ipString(self.m_device_ips[0])
 
  
   '''
@@ -194,11 +87,17 @@ class spi_io:
   '''
   
   
-  def initSpiMaster(self, net_ipString, bitrate_kHz, clock_mode, ss_polarity):
+  def initSpiMaster(self, net_ipString, parameters):
     
-    self.m_spi_bitrate_kHz  = bitrate_kHz
-    self.m_spi_clock_mode   = clock_mode
-    self.m_spi_ss_polarity  = ss_polarity
+    self.m_spi_parameters   = parameters
+    self.m_spi_clock_mode   = parameters.clock_mode
+    self.m_spi_ss_polarity  = parameters.ss_polarity
+    self.m_spi_target_vdd   = parameters.target_vdds
+    self.m_spi_bitorder     = parameters.bitorder
+    self.m_spi_address_base = parameters.address_base
+    self.m_spi_clock_kHz    = self.m_spi_parameters.clock_kHz
+
+    
     self.m_device_ipString = net_ipString
     
     self.devOpen(self.m_device_ipString)
@@ -220,17 +119,7 @@ class spi_io:
 
     return
   
-  '''
-  closeSpiMaster()
-  
-    release the SPI connection and app handles.
-    release any other app/connection resource reservations
-    
-  '''
-  def closeSpiMaster(self):
-    pmact.ps_app_disconnect(self.m_app_conn_handle)
-    pmact.ps_channel_close(self.m_channel_handle)
-     
+
    
   
   
@@ -262,31 +151,27 @@ class spi_io:
   
       return self.m_pm, self.m_app_conn_handle, self.m_channel_handle
   
+  
+  '''
+  closeSpiMaster()
+  
+    release the SPI connection and app handles.
+    release any other app/connection resource reservations
+    
+  '''
+     
   def devClose (self):
-      pm.ps_channel_close(self.m_channel_handle)
-      pm.ps_app_disconnect(self.m_app_conn_handle)
-      pm.pm_close(self.m_pm)
+      self.m_pm.ps_channel_close(self.m_channel_handle)
+      self.m_pm.ps_app_disconnect(self.m_app_conn_handle)
+      self.m_pm.pm_close(self.m_pm)
 
   def closeSpiMaster(self):
-    devClose()
+    self.devClose()
 
 
   
   def devCollect (self, collect):
 
-    def showCollectResponseMsg(self, response):
-      message=promact_msg.getResponseMessage(response)
-      if message==None:
-        fatalError("unknown collect response")
-      print("Collect Response: "+message)
-    
-    if collect < 0:
-        print(pmact.ps_app_status_string(collect))
-        return
-  
-    collection_count=0
-    response_length=0
-    response_buf=pmact.array_u08(0)
 
     '''
     collect intermediate results until:
@@ -301,7 +186,7 @@ class spi_io:
     '''
     while True:
         t, _length, result = pmact.ps_collect_resp(collect, -1)
-        self.showCollectResponseMsg(t)
+        self.m_pm_msg.showCollectResponseMsg(t)
         if t == pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT:
             break
         elif t < 0:
@@ -321,13 +206,6 @@ class spi_io:
     return _ret, buf
   
 
-    
-
-  
-  
-  
-    
-
 
   def spiMasterMultimodeCmd(self,
                                 spi_cmd,
@@ -343,10 +221,12 @@ class spi_io:
     spi_session=self.spiTransaction(spi_cmd, self.precedent_cmdspec(spi_cmd))
     collect = None
     
+    '''
     if cmd_byte in self.NODATA_CMDS:
       dataphase_readNotWrite=None
     else:
       dataphase_readNotWrite=cmd_byte in self.READ_DATA_CMDS
+    '''
     
     print("cmd_byte= ", hex(cmd_byte))
     
@@ -407,7 +287,7 @@ class spi_io:
 
         collect_handle, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
         if collect_handle==None:
-          fatalError("NoneType collected")
+          self.m_testutil.fatalError("NoneType collected")
           
         result_length, _dc = self.devCollect(collect_handle)
         pmact.ps_queue_destroy(session_queue)
@@ -503,12 +383,12 @@ class spi_io:
             data_length_bad=True
 
       if data_length_bad:  
-        fatalError("cmd data spec error")
+        self.m_testutil.fatalError("cmd data spec error")
 
       # data_length is valid
       iotype=spi_session.readNotWrite()
       if iotype==self.IOTYPE_NONE:
-        fatalError("illegal data phase spec")
+        self.m_testutil.fatalError("illegal data phase spec")
 
 
       '''
@@ -556,11 +436,11 @@ class spi_io:
           
         collect_length, collect_buf = self.devCollect(collect)
         
-        if not isinstance(collect_buf, collections.Iterable):
-          fatalError("return buf not 'iterable'")
+        if not isinstance(collect_buf, coll.Iterable):
+          self.m_testutil.fatalError("return buf not 'iterable'")
 
         if data_length > len(data_buffer) or data_length > len(collect_buf):
-          fatalError("buffer, size out of sync")
+          self.m_testutil.fatalError("buffer, size out of sync")
                       
         for index in range(data_length):
           data_buffer[index]=collect_buf[index]
@@ -568,9 +448,10 @@ class spi_io:
         pmact.ps_queue_destroy(session_queue)
         return collect_length
     else:
-      fatalError("corrupt session/session_spec")  
-    fatalError("how did I get here?")
+      self.m_testutil.fatalError("corrupt session/session_spec")  
+    self.m_testutil.fatalError("how did I get here?")
     
+  pass
       
 
 
