@@ -1,6 +1,5 @@
 from __future__ import division, with_statement, print_function
 import TestSpiDut as spitest
-import TestDutSIO as dutsio
 
 ######################################
 

@@ -6,8 +6,10 @@ import promira_py as pm
 import promactive_msg as pm_msg
 import array
 import test_utility as testutil
-import spi_cfg_mgr as spicfg
 from spi_cfg_mgr import configMgr
+import spi_cfg_mgr as spicfg
+import cmd_protocol as protocol
+
 
 
 
@@ -31,7 +33,7 @@ class spiIO:
   
   
   m_spi_configuration = None
-  
+  m_spi_transaction = None
   m_queue           = None
   m_channel_handle  = None
   m_app_conn_handle = None
@@ -41,7 +43,7 @@ class spiIO:
   def __init__(self):
     self.m_pm_msg   = pm_msg.promactMessages()
     self.m_test_util= testutil.testUtil()    
-    self.m_cfg_mgr  = spicfg.configMgr()
+    self.m_cfg_mgr  = configMgr()
     
     self.m_ss_mask = 0x1
     self.m_device = None
@@ -54,7 +56,6 @@ class spiIO:
     self.m_timeout_ms = 1000  # arbitrary 10 second value 
 
     self.discoverDevice()
-    
     self.initSpiMaster(self.m_device_ipString, self.m_spi_configuration )
 
   
@@ -69,11 +70,16 @@ class spiIO:
 
     return_tuple = pm.pm_find_devices_ext(self.m_device_ips, self.m_device_ids, self.m_device_status)
     device_count = return_tuple[0]
-    self.m_device_ips = return_tuple[1]
-    self.m_devices = return_tuple[2]
-    self.m_device_ids = return_tuple[3]
-    print("device_count:" + str(device_count))
-    self.m_device_ipString=self.m_test_util.ipString(self.m_device_ips[0])
+    if (device_count >= 1):
+      self.m_device_ips = return_tuple[1]
+      self.m_devices = return_tuple[2]
+      self.m_device_ids = return_tuple[3]
+      print("device_count:" + str(device_count))
+      self.m_device_ipString=self.m_test_util.ipString(self.m_device_ips[0])
+      return True
+    
+    return False
+    
 
  
   '''
@@ -90,30 +96,28 @@ class spiIO:
   def initSpiMaster(self, net_ipString, parameters):
     
     self.m_spi_parameters   = parameters
-    self.m_spi_clock_mode   = parameters.clock_mode
+    self.m_spi_clk_kHz      = self.m_spi_parameters.clk_kHz
+    self.m_spi_clk_mode     = parameters.clk_mode
     self.m_spi_ss_polarity  = parameters.ss_polarity
-    self.m_spi_target_vdd   = parameters.target_vdds
-    self.m_spi_bitorder     = parameters.bitorder
+    self.m_spi_target_vdd   = parameters.target_vdd
+    self.m_spi_bit_order    = parameters.bit_order
     self.m_spi_address_base = parameters.address_base
-    self.m_spi_clock_kHz    = self.m_spi_parameters.clock_kHz
 
     
     self.m_device_ipString = net_ipString
-    
     self.devOpen(self.m_device_ipString)
     
     pmact.ps_app_configure(self.m_channel_handle, pmact.PS_APP_CONFIG_SPI)
-    # Power the EEPROM using one of the VTGT supply pins
     
+    # Power the EEPROM using one of the VTGT supply pins
     pmact.ps_phy_target_power(self.m_channel_handle, pmact.PS_PHY_TARGET_POWER_TARGET1_3V)  
-      
-    pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_bitrate_kHz)
+
+    pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
     
     #configure static spi parameters
-
-    pmact.ps_spi_configure( self.m_channel_handle,
-                            self.m_spi_clock_mode, 
-                            self.m_spi_bitorder, 
+    retval=pmact.ps_spi_configure( self.m_channel_handle,
+                            self.m_spi_clk_mode, 
+                            self.m_spi_bit_order, 
                             self.m_spi_ss_polarity)
     
 
@@ -186,7 +190,7 @@ class spiIO:
     '''
     while True:
         t, _length, result = pmact.ps_collect_resp(collect, -1)
-        self.m_pm_msg.showCollectResponseMsg(t)
+        # self.m_pm_msg.showCollectResponseMsg(t)
         if t == pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT:
             break
         elif t < 0:
@@ -195,7 +199,7 @@ class spiIO:
           
         if t == pmact.PS_SPI_CMD_READ:
             _ret, _word_size, buf = pmact.ps_collect_spi_read(collect, result)
-            print("PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf)))            #response_buf += buf
+            #print("PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf)))            #response_buf += buf
             #response_length+= len(buf)
     
 #    return response_length, response_buf
@@ -217,8 +221,8 @@ class spiIO:
 
         
     cmd_byte=spi_cmd[0]
-    #cmd_spec=self.precedent_cmdspec(spi_cmd)
-    spi_session=self.spiTransaction(spi_cmd, self.precedent_cmdspec(spi_cmd))
+    cmd_spec=protocol.precedentCmdSpec(spi_cmd)
+    spi_session=protocol.spiTransaction(spi_cmd, cmd_spec)
     collect = None
     
     '''
@@ -247,9 +251,9 @@ class spiIO:
     of the enqueued writes
     '''
     
-    if cmd_byte in self.WREN_REQUIRED:
-      wren_cmd=array.ArrayType('B', [self.WREN])
-      pmact.ps_queue_spi_write(session_queue, self.SPIIO_SINGLE, 8, 1, wren_cmd )
+    if cmd_byte in protocol.WREN_REQUIRED:
+      wren_cmd=array.ArrayType('B', [protocol.WREN])
+      pmact.ps_queue_spi_write(session_queue, protocol.SPIIO_SINGLE, 8, 1, wren_cmd )
       pmact.ps_queue_spi_ss(session_queue, 0)
       pmact.ps_queue_spi_ss(session_queue, self.m_ss_mask)
 
@@ -315,7 +319,7 @@ class spiIO:
                                phase.length,
                                data_out)
 
-      self.printArrayHexDump("addr: ", data_out)
+      self.m_test_util.printArrayHexDump("addr: ", data_out)
 
         #pmact.ps_queue_spi_ss(session_queue, 0)
         
@@ -387,7 +391,7 @@ class spiIO:
 
       # data_length is valid
       iotype=spi_session.readNotWrite()
-      if iotype==self.IOTYPE_NONE:
+      if iotype==protocol.IOTYPE_NONE:
         self.m_testutil.fatalError("illegal data phase spec")
 
 
@@ -401,7 +405,7 @@ class spiIO:
       data_out contains only the final non-payload segments of bytes to output
       '''
 
-      if iotype==self.IOTYPE_WRITE:
+      if iotype==protocol.IOTYPE_WRITE:
         # append valid buffer bytes to pending data_out
         pmact.ps_queue_spi_write(session_queue,
                                  phase.mode,
@@ -411,7 +415,7 @@ class spiIO:
 
         pmact.ps_queue_spi_ss(session_queue, 0)
         pmact.ps_queue_spi_oe(session_queue, 0)
-        pmact.ps_queue_delay_ms(session_queue, 1)
+        #pmact.ps_queue_delay_ms(session_queue, 1)
           
         collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
         _in_length, _in_buf = self.devCollect(collect)

@@ -2,34 +2,7 @@ import random
 import sys
 import promact_is_py as pmact
 import spi_cfg_mgr as spicfg
-
-# Straightforward implementation of the Singleton Pattern
-
-class singletonInstantiator(object):
-    _instance = None
-    _testUtil = None
-    _configMgr= None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            print('Creating the object')
-            cls._instance = super(singletonInstantiator, cls).__new__(cls)
-            # Put any initialization here.
-        return cls._instance
-
-    def getTestUtil(self):
-      if self._testUtil==None:
-        self._testUtil=testUtil()
-      
-      return self._testUtil
-    
-    def getConfigMgr(self):
-      if self._configMgr==None:
-        self._configMgr=spicfg.configMgr()
-      
-      return self._configMgr
-
-
+import eeprom
 
 
 class testUtil:
@@ -45,12 +18,14 @@ class testUtil:
       if cls._instance is None:
           print('Creating the testUtil object')
           cls._instance = super(testUtil, cls).__new__(cls)
-          cls.__singleton_init__(cls)
+          cls.m_page_size=eeprom.eeprom.EEPROM_PAGE_SIZE
+          cls.buildRandomPageArrays(cls)
       return cls._instance
   
   def __singleton_init__(self, page_size=256):
     random.seed(0)
-
+    self.m_page_size=page_size
+    self.buildRandomPageArrays()
   
   def fatalError(self, reason):
     print("Fatal : "+reason)
@@ -113,9 +88,10 @@ class testUtil:
   def buildRandomPageArrays(self):
       self.m_random_page_array_list = []
       for index in range(self.m_randarray_count):
-          self.m_random_page_array_list.append(self.generateRandomArray(self.m_page_size))
-          array_label = "Random Page Array #%02X:" % index
-          # self.printArrayHexDump(array_label, self.m_random_page_array_list[index])
+        rand_array=self.generateRandomArray(self.m_page_size, self.m_page_size)   
+        self.m_random_page_array_list.append(rand_array)
+        # array_label = "Random Page Array #%02X:" % index
+        # self.printArrayHexDump(array_label, self.m_random_page_array_list[index])
           
   
   def nextRandomPageArray(self):

@@ -22,7 +22,11 @@ class configVal:
   '''
   SPI_SS_ALL_ACTIVE_HIGH = 0x0F
   SPI_SS_ALL_ACTIVE_LOW = 0x00
-  SPI_SS0_ACTIVE_HIGH=0x01
+  
+  SPI_SS0_MASK=0x01
+  SPI_SS1_MASK=0x02
+  SPI_SS2_MASK=0x04
+  SPI_SS3_MASK=0x08
   
   
 
@@ -34,11 +38,11 @@ class configMgr:
   spi_configuration=coll.namedtuple('spi_configuration', 'clk_mode bit_order ss_polarity clk_kHz address_base target_vdd' )
 
   spi_config_ranges=spi_configuration( 
-    clk_mode      = [configVal.SPICLOCKMODE_0, configVal.SPICLOCKMODE_3],
+    clk_mode      = [configVal.SPICLOCKMODE_0], #, configVal.SPICLOCKMODE_3],
     bit_order     = [configVal.SPIBITORDER_MSB],
     ss_polarity   = [configVal.SPI_SS_ALL_ACTIVE_LOW],
-    clk_kHz       = [1000, 6200, 12200, 18000, 23400, 28200, 32200, 35600],
-    address_base  = [0, 0x1000, 0x2000, 0x3000],
+    clk_kHz       = [1000], # 6200, 12200, 18000, 23400, 28200, 32200, 35600],
+    address_base  = [0], # 0x1000, 0x2000, 0x3000],
     target_vdd    = [3.3])  #  alternative: [1.6, 1.8]
 
   m_spi_config_list=None

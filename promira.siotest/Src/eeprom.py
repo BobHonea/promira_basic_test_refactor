@@ -2,6 +2,9 @@ import array
 import test_utility as testutil
 import sys
 import promact_is_py as pmact
+import spi_io as spiio
+import spi_cfg_mgr as spicfg
+import cmd_protocol as protocol
 
 class eeprom:
   
@@ -34,9 +37,8 @@ class eeprom:
   m_testutil=None
   
   def __init__(self):
-    self.m_instantiator = testutil.singletonInstantiator()
-    self.m_testutil     = self.m_instantiator.getTestUtil()
-
+    self.m_testutil     = testutil.testUtil()
+    self.m_spiio        = spiio.spiIO()
     self.enumerateBlocks()
 
   
@@ -56,27 +58,32 @@ class eeprom:
       pass
     return
   
-  
-  
-  def eepromSpiTestQuadJedec(self):
-    result_tuple = self.spi_master_multimode_cmd(self.SPICMD_QUAD_JID, None, 3, self.m_rxdata_array)
-    if result_tuple[0] < 3:
+  def eepromSpiDoJedecTest(self, cmd_byte):  
+    rxdata_array=array.ArrayType('B', [0]*3)
+    result_length = self.m_spiio.spiMasterMultimodeCmd(cmd_byte, None, 3, rxdata_array)
+    if result_length != 3:
       print("error: jedec read")
       sys.exit()
 
-    self.m_rxdata_array = result_tuple[1][1:]
-      
     jedec_id = [0xBF, 0x26, 0x42]
     for index in range(len(jedec_id)):
-      if jedec_id[index] != self.m_rxdata_array[index]:
+      if jedec_id[index] != rxdata_array[index]:
         return False
     
     return True
 
-          
+  
+  def eepromSpiTestQuadJedec(self):
+    return self.eepromSpiDoJedecTest(protocol.SPICMD_QUAD_JID)
+  
+  def eepromSpiTestJedec(self):
+    return self.eepromSpiDoJedecTest(protocol.SPICMD_JEDEC_ID)
+  
+ 
+            
   def eepromSpiTestNOP(self):
-    result = self.spi_master_multimode_cmd(self.SPICMD_NOP)
-    return result==1
+    result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_NOP)
+    return result==0
   
   EESTATUS_BUSY1 = 0x1
   EESTATUS_W_ENABLE_LATCH = 0x2
@@ -101,7 +108,10 @@ class eeprom:
   def eepromSpiStatusReadStatusRegister(self):
     data_array = pmact.array_u08(1)
     
-    data_in_length = self.spi_master_multimode_cmd(self.SPICMD_RDSR, None, len(data_array), data_array)
+    data_in_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RDSR,
+                                                            None,
+                                                            len(data_array),
+                                                            data_array)
     self.m_eepromStatus = None
     if data_in_length>=1:
       #offset=len(data_array)-data_in_length
@@ -113,14 +123,16 @@ class eeprom:
     
   def eepromSpiReadData(self, read_address, read_length, read_array):
 
-    data_in_length = self.spi_master_multimode_cmd(self.SPICMD_READ, read_address, read_length, read_array)
+    data_in_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_READ,
+                                                            read_address, read_length, read_array)
     if data_in_length==read_length:
       return True
     self.m_testutil.fatalError("SpiReadData error")
 
   def eepromSpiReadDataDual(self, read_address, read_length, read_array):
 
-    result_length = self.spi_master_multimode_cmd(self.SPICMD_SDOREAD, read_address, read_length, read_array)
+    result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREAD,
+                                                           read_address, read_length, read_array)
 
     if result_length==read_length:
       return True
@@ -129,13 +141,15 @@ class eeprom:
 
 
   def eepromSpiWriteEnable(self):
-    result_tuple = self.spi_master_multimode_cmd(self.SPICMD_WREN)
+    result_tuple = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WREN)
     return (result_tuple == 1)
 
   
   def eepromSpiReadProtectBitmap(self):
     self.m_eeprom_protect_bitmap = pmact.array_u08(18)
-    data_in_length = self.spi_master_multimode_cmd(self.SPICMD_RBPR, None, len(self.m_eeprom_protect_bitmap), self.m_eeprom_protect_bitmap)
+    data_in_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RBPR,
+                                                            None, len(self.m_eeprom_protect_bitmap),
+                                                            self.m_eeprom_protect_bitmap)
     if data_in_length==18:
       return True
     else:
@@ -148,7 +162,7 @@ class eeprom:
     self.eepromSpiWaitUntilNotBusy()
           
 
-    result_length = self.spi_master_multimode_cmd(self.SPICMD_SE, sector_address)
+    result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SE, sector_address)
     return True
 
       
@@ -186,12 +200,13 @@ class eeprom:
 
     self.eepromSpiWaitUntilNotBusy()
     
-    result_length =self.spi_master_multimode_cmd(self.SPICMD_PP, write_address, write_length, write_array)
+    result_length =self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_PP,
+                                                         write_address, write_length, write_array)
     return (result_length == write_length)
 
 
   def eepromSpiGlobalUnlock(self):
-    result_length = self.spi_master_multimode_cmd(self.SPICMD_ULBPR)
+    result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_ULBPR)
     if result_length==1:
       return True
     
@@ -201,7 +216,9 @@ class eeprom:
   def eepromWriteProtectBitmap(self):
     if ( type(self.m_eeprom_protect_bitmap) == array.ArrayType and 
               len(self.m_eeprom_protect_bitmap)==18):
-      result_length = self.spi_master_multimode_cmd(self.SPICMD_WBPR, None, len(self.m_eeprom_protect_bitmap), self.m_eeprom_protect_bitmap)
+      result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WBPR,
+                                                             None, len(self.m_eeprom_protect_bitmap),
+                                                             self.m_eeprom_protect_bitmap)
       if result_length>=len(self.m_eeprom_protect_bitmap):
         return True
       
