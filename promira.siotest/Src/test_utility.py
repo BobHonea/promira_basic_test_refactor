@@ -3,7 +3,7 @@ import sys
 import promact_is_py as pmact
 import spi_cfg_mgr as spicfg
 import eeprom
-
+import array
 
 class testUtil:
   m_instantiated=False
@@ -101,7 +101,7 @@ class testUtil:
 
   def printArrayHexDump(self, label, data_array=None):
     
-    if data_array == None or len(data_array) == 0:
+    if not type(data_array)==array.ArrayType or len(data_array)==0:
       print("Hexdump:  array is empty")
       return
     

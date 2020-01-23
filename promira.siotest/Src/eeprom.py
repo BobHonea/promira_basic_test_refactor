@@ -2,12 +2,15 @@ import array
 import test_utility as testutil
 import sys
 import promact_is_py as pmact
+import collections as coll
 import spi_io as spiio
+
 import spi_cfg_mgr as spicfg
 import cmd_protocol as protocol
 
 class eeprom:
   
+  EEPROM_PROTECT_BITMAP_SIZE = 18
   EEPROM_PAGE_SIZE = 0x100
   EEPROM_SECTOR_SIZE = 0x1000
   EEPROM_SIZE = 0x400000
@@ -42,6 +45,9 @@ class eeprom:
     self.enumerateBlocks()
 
   
+  def getobjectSpiIO(self):
+    return self.m_spiio
+  
   def enumerateBlocks(self):
     for blockset in self.EEPROM_BLOCKS:
       address = blockset[0]
@@ -58,10 +64,10 @@ class eeprom:
       pass
     return
   
-  def eepromSpiDoJedecTest(self, cmd_byte):  
+  def doJedecTest(self, cmd_byte):  
     rxdata_array=array.ArrayType('B', [0]*3)
-    result_length = self.m_spiio.spiMasterMultimodeCmd(cmd_byte, None, 3, rxdata_array)
-    if result_length != 3:
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(cmd_byte, None, 3, rxdata_array)
+    if spi_result.xfer_length != 3:
       print("error: jedec read")
       sys.exit()
 
@@ -73,15 +79,15 @@ class eeprom:
     return True
 
   
-  def eepromSpiTestQuadJedec(self):
-    return self.eepromSpiDoJedecTest(protocol.SPICMD_QUAD_JID)
+  def testQuadJedec(self):
+    return self.doJedecTest(protocol.SPICMD_QUAD_JID)
   
-  def eepromSpiTestJedec(self):
-    return self.eepromSpiDoJedecTest(protocol.SPICMD_JEDEC_ID)
+  def testJedec(self):
+    return self.doJedecTest(protocol.SPICMD_JEDEC_ID)
   
- 
+
             
-  def eepromSpiTestNOP(self):
+  def testNOP(self):
     result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_NOP)
     return result==0
   
@@ -95,24 +101,26 @@ class eeprom:
   EESTATUS_BUSY80 = 0x80
   EESTATUS_READ_ERROR = 0x8000
   
-  def eepromSpiStatusBusy(self):
-    self.eepromSpiStatusReadStatusRegister()
+  def statusBusy(self):
+    self.readStatusRegister()
     return ((self.m_eepromStatus & self.EESTATUS_BUSY1) != 0)
   
-  def eepromSpiWaitUntilNotBusy(self):
-    while self.eepromSpiStatusBusy():
+  def waitUntilNotBusy(self):
+    while self.statusBusy():
       print(",")
       continue
     return
   
-  def eepromSpiStatusReadStatusRegister(self):
+  def readStatusRegister(self):
     data_array = pmact.array_u08(1)
     
-    data_in_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RDSR,
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RDSR,
                                                             None,
                                                             len(data_array),
                                                             data_array)
     self.m_eepromStatus = None
+    data_in_length=spi_result.xfer_length
+    
     if data_in_length>=1:
       #offset=len(data_array)-data_in_length
       self.m_eepromStatus = data_array[0]
@@ -121,52 +129,67 @@ class eeprom:
     self.m_testutil.fatalError("ReadStatusRegister error")
     return self.EESTATUS_READ_ERROR
     
-  def eepromSpiReadData(self, read_address, read_length, read_array):
+  def readData(self, read_address, read_length, read_array):
 
-    data_in_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_READ,
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_READ,
                                                             read_address, read_length, read_array)
+    data_in_length = spi_result.xfer_length
+    
     if data_in_length==read_length:
       return True
     self.m_testutil.fatalError("SpiReadData error")
 
-  def eepromSpiReadDataDual(self, read_address, read_length, read_array):
+  def readDataDual(self, read_address, read_length, read_array):
 
-    result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREAD,
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREAD,
                                                            read_address, read_length, read_array)
 
+    result_length = spi_result.xfer_length
+    
     if result_length==read_length:
       return True
     self.m_testutil.fatalError("SpiReadDual error")    
 
 
 
-  def eepromSpiWriteEnable(self):
-    result_tuple = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WREN)
-    return (result_tuple == 1)
+  def writeEnable(self):
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WREN)
+    return spi_result.success
 
   
-  def eepromSpiReadProtectBitmap(self):
-    self.m_eeprom_protect_bitmap = pmact.array_u08(18)
-    data_in_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RBPR,
-                                                            None, len(self.m_eeprom_protect_bitmap),
-                                                            self.m_eeprom_protect_bitmap)
+  def readBlockProtectBitmap(self):
+    self.m_block_protect_bitmap = pmact.array_u08(18)
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RBPR,
+                                                            None, len(self.m_block_protect_bitmap),
+                                                            self.m_block_protect_bitmap)
+    data_in_length=spi_result.xfer_length
     if data_in_length==18:
       return True
     else:
       self.m_testutil.fatalError("Protect Bitmap Read fail")
+
   
-  def eepromSpiEraseSector(self, sector_address):
+  def getBlockProtectBitmap(self):
+    return self.m_block_protect_bitmap
+
+  def setBlockProtectBitmap(self, bitmap):
+    if type(bitmap)==array.ArrayType and len(bitmap) == self.EEPROM_PROTECT_BITMAP_SIZE:
+      self.m_block_protect_bitmap=bitmap
+    else:
+      self.m_testutil.fatalError("Unsupported Bitmap Array Size")
+
+  def eraseSector(self, sector_address):
     if (sector_address & ~(self.EEPROM_SECTOR_SIZE-1)) != sector_address:
       self.m_testutil.fatalError("sector address error")
 
-    self.eepromSpiWaitUntilNotBusy()
+    self.waitUntilNotBusy()
           
 
-    result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SE, sector_address)
-    return True
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SE, sector_address)
+    return spi_result.success
 
       
-  def eepromSpiUpdateWithinPage(self, write_address, write_length, write_array):
+  def updateWithinPage(self, write_address, write_length, write_array):
     # Update one page per function use
     # This function erases a sector EVERY TIME it is used
     # Proves erase-before-write works, but NOT EFFICIENT
@@ -182,44 +205,44 @@ class eeprom:
     sector_address = write_address & ~sector_size_mask
     sector_offset = write_address & sector_size_mask
     
-    if self.eepromSpiEraseSector(sector_address) == False:
+    if self.eraseSector(sector_address) == False:
       return False
     
-    if self.eepromSpiWriteWithinPage(write_address, write_length, write_array) == False:
+    if self.writeWithinPage(write_address, write_length, write_array) == False:
       return False
     
     return True
 
   
-  def eepromSpiWriteWithinPage(self, write_address, write_length, write_array):
+  def writeWithinPage(self, write_address, write_length, write_array):
     # Update one page per function use
     start_page = write_address // self.EEPROM_PAGE_SIZE
     end_page = (write_address + (write_length - 1)) // self.EEPROM_PAGE_SIZE
     if start_page != end_page:
       self.m_testutil.fatalError("Page Write Spans Pages")
 
-    self.eepromSpiWaitUntilNotBusy()
+    self.waitUntilNotBusy()
     
-    result_length =self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_PP,
+    spi_result =self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_PP,
                                                          write_address, write_length, write_array)
+    result_length=spi_result.xfer_length
     return (result_length == write_length)
 
 
-  def eepromSpiGlobalUnlock(self):
-    result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_ULBPR)
-    if result_length==1:
-      return True
+  def globalUnlock(self):
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_ULBPR)
+    return spi_result.success
     
     self.m_testutil.fatalError("SpiGlobalUnlock error")
   
   
-  def eepromWriteProtectBitmap(self):
-    if ( type(self.m_eeprom_protect_bitmap) == array.ArrayType and 
-              len(self.m_eeprom_protect_bitmap)==18):
-      result_length = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WBPR,
-                                                             None, len(self.m_eeprom_protect_bitmap),
-                                                             self.m_eeprom_protect_bitmap)
-      if result_length>=len(self.m_eeprom_protect_bitmap):
+  def writeBlockProtectBitmap(self):
+    if ( type(self.m_block_protect_bitmap) == array.ArrayType and 
+              len(self.m_block_protect_bitmap)==18):
+      spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WBPR,
+                                                             None, len(self.m_block_protect_bitmap),
+                                                             self.m_block_protect_bitmap)
+      if spi_result.xfer_length>=len(self.m_block_protect_bitmap):
         return True
       
     self.m_testutil.fatalError("protect bitmap write failure")

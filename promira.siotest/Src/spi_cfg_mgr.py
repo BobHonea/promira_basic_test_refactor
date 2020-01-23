@@ -41,7 +41,7 @@ class configMgr:
     clk_mode      = [configVal.SPICLOCKMODE_0], #, configVal.SPICLOCKMODE_3],
     bit_order     = [configVal.SPIBITORDER_MSB],
     ss_polarity   = [configVal.SPI_SS_ALL_ACTIVE_LOW],
-    clk_kHz       = [1000], # 6200, 12200, 18000, 23400, 28200, 32200, 35600],
+    clk_kHz       = [1000, 6200, 12200, 18000, 23400, 28200, 32200, 35600],
     address_base  = [0], # 0x1000, 0x2000, 0x3000],
     target_vdd    = [3.3])  #  alternative: [1.6, 1.8]
 

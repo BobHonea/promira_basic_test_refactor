@@ -16,8 +16,6 @@ import cmd_protocol as protocol
 class spiIO:
   
     
-      
-
   m_ss_mask         = None
   m_device          = None
   m_spi_bitorder    = None
@@ -39,7 +37,7 @@ class spiIO:
   m_app_conn_handle = None
   m_pm              = None
   m_app_name        = "com.totalphase.promact_is"
-  
+  m_promira_open    = None
   def __init__(self):
     self.m_pm_msg   = pm_msg.promactMessages()
     self.m_test_util= testutil.testUtil()    
@@ -56,7 +54,8 @@ class spiIO:
     self.m_timeout_ms = 1000  # arbitrary 10 second value 
 
     self.discoverDevice()
-    self.initSpiMaster(self.m_device_ipString, self.m_spi_configuration )
+    self.m_spi_initialized = False
+    
 
   
   
@@ -92,8 +91,11 @@ class spiIO:
   
   '''
   
+  def getAdapterIP(self):
+    return self.m_device_ipString
   
-  def initSpiMaster(self, net_ipString, parameters):
+  
+  def initSpiMaster(self, parameters):
     
     self.m_spi_parameters   = parameters
     self.m_spi_clk_kHz      = self.m_spi_parameters.clk_kHz
@@ -103,10 +105,10 @@ class spiIO:
     self.m_spi_bit_order    = parameters.bit_order
     self.m_spi_address_base = parameters.address_base
 
-    
-    self.m_device_ipString = net_ipString
-    self.devOpen(self.m_device_ipString)
-    
+    if self.m_promira_open != True:    
+      self.devOpen(self.m_device_ipString)
+      self.m_promira_open=True
+      
     pmact.ps_app_configure(self.m_channel_handle, pmact.PS_APP_CONFIG_SPI)
     
     # Power the EEPROM using one of the VTGT supply pins
@@ -120,7 +122,8 @@ class spiIO:
                             self.m_spi_bit_order, 
                             self.m_spi_ss_polarity)
     
-
+    self.m_spi_initialized=True
+    
     return
   
 
@@ -210,15 +213,26 @@ class spiIO:
     return _ret, buf
   
 
-
+  '''
+  spiMasterMultlimodeCmd( spi_cmd, address, data_length, data_buffer )
+    on read commands, the buffer presented will be returned with (any) received data
+    
+  RETURN
+    tuplet:  ( Success(T/F), data transfer length/None, data transfer array/None)
+  '''
+ 
+  SpiResult=coll.namedtuple('SpiResult', 'success xfer_length xfer_array')
+  
   def spiMasterMultimodeCmd(self,
                                 spi_cmd,
                                 address:int=None,
                                 data_length=None,
-                                data_buffer=None):
+                                data_buffer=None): 
+    # -> self.SpiResult
 
 
-
+    if self.m_spi_initialized != True:
+      self.m_test_util.fatalError("attempt to transact on uninitialized SPI bus")
         
     cmd_byte=spi_cmd[0]
     cmd_spec=protocol.precedentCmdSpec(spi_cmd)
@@ -232,7 +246,7 @@ class spiIO:
       dataphase_readNotWrite=cmd_byte in self.READ_DATA_CMDS
     '''
     
-    print("cmd_byte= ", hex(cmd_byte))
+    #print("cmd_byte= ", hex(cmd_byte))
     
     session_queue = pmact.ps_queue_create(self.m_app_conn_handle,
                                           pmact.PS_MODULE_ID_SPI_ACTIVE)
@@ -295,7 +309,7 @@ class spiIO:
           
         result_length, _dc = self.devCollect(collect_handle)
         pmact.ps_queue_destroy(session_queue)
-        return result_length
+        return self.SpiResult(True, None, None)
       else:
         spi_session.nextSpiPhase()
 
@@ -319,7 +333,7 @@ class spiIO:
                                phase.length,
                                data_out)
 
-      self.m_test_util.printArrayHexDump("addr: ", data_out)
+      #self.m_test_util.printArrayHexDump("addr: ", data_out)
 
         #pmact.ps_queue_spi_ss(session_queue, 0)
         
@@ -329,7 +343,7 @@ class spiIO:
         collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
         collect_length, collect_buf = self.devCollect(collect)
         pmact.ps_queue_destroy(session_queue)
-        return collect_length
+        return self.SpiResult(True, collect_length, _dc)
         
       spi_session.nextSpiPhase()
 
@@ -420,7 +434,8 @@ class spiIO:
         collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
         _in_length, _in_buf = self.devCollect(collect)
         pmact.ps_queue_destroy(session_queue)
-        return len(data_out)
+        
+        return self.SpiResult(True, data_length, data_buffer)
 
       else:
         '''
@@ -450,7 +465,7 @@ class spiIO:
           data_buffer[index]=collect_buf[index]
 
         pmact.ps_queue_destroy(session_queue)
-        return collect_length
+        return self.SpiResult(True, collect_length, data_buffer)
     else:
       self.m_testutil.fatalError("corrupt session/session_spec")  
     self.m_testutil.fatalError("how did I get here?")
