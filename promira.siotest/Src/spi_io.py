@@ -127,7 +127,37 @@ class spiIO:
     return
   
 
-   
+  def setTargetpower(self, vtgt_setting, variable_voltage_level):
+    
+    if type(variable_voltage_level)==float:
+      if 0.9 <= variable_voltage_level and 3.45>=variable_voltage_level:
+        # supported variable level
+        if vtgt_setting not in [pmact.PS_PHY_TARGET_POWER_TARGET2, pmact.PS_PHY_TARGET_POWER_BOTH]:
+          self.m_testutil.fatalError("unsupported target power settings")
+      pass
+    
+    if vtgt_setting==pmact.PS_PHY_TARGET_POWER_NONE:
+          # set no power and return
+      pass
+    elif ( vtgt_setting==pmact.PS_PHY_TARGET_POWER_TARGET1_3V
+          or vtgt_setting==pmact.PS_PHY_TARGET_POWER_TARGET1_5V):
+          # set fixed power and return
+      pass
+    elif vtgt_setting==pmact.PS_PHY_TARGET_POWER_TARGET2:
+          # set variable power only and return
+      pass
+    elif vtgt_setting==pmact.PS_PHY_TARGET_POWER_BOTH:
+        # set fixed and variable power and return
+      pass
+    else:
+      self.m_testutil.fatalError("unsupported power setting")
+ 
+ 
+      
+#    ps_phy_level_shift (PromiraChannelHandle channel,
+#                              f32                  level);
+    
+    if vtgt_22_24==   
   
   
   
@@ -225,7 +255,7 @@ class spiIO:
   
   def spiMasterMultimodeCmd(self,
                                 spi_cmd,
-                                address:int=None,
+                                address=None,
                                 data_length=None,
                                 data_buffer=None): 
     # -> self.SpiResult

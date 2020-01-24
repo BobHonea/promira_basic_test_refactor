@@ -1,6 +1,7 @@
 import collections as coll
 import promact_is_py as pmact
 
+
 class configVal:
   
   BUSTYPE_UNKNOWN = 0
@@ -35,16 +36,17 @@ class configVal:
 class configMgr:
 
 
-  spi_configuration=coll.namedtuple('spi_configuration', 'clk_mode bit_order ss_polarity clk_kHz address_base target_vdd' )
+  spi_configuration=coll.namedtuple('spi_configuration', 'clk_mode bit_order ss_polarity clk_kHz address_base target_v_fixed target_v_variable' )
 
   spi_config_ranges=spi_configuration( 
-    clk_mode      = [configVal.SPICLOCKMODE_0], #, configVal.SPICLOCKMODE_3],
+    clk_mode      = [configVal.SPICLOCKMODE_0,configVal.SPICLOCKMODE_3],
     bit_order     = [configVal.SPIBITORDER_MSB],
     ss_polarity   = [configVal.SPI_SS_ALL_ACTIVE_LOW],
     clk_kHz       = [1000, 6200, 12200, 18000, 23400, 28200, 32200, 35600],
     address_base  = [0], # 0x1000, 0x2000, 0x3000],
-    target_vdd    = [3.3])  #  alternative: [1.6, 1.8]
-
+    tgt_v_fixed   = [3.3, 5.0],  #  alternative: [1.6, 1.8]
+    tgt_v_variable= [1.6, 1.8, 3.3 ])
+  
   m_spi_config_list=None
   
 
@@ -89,6 +91,11 @@ class configMgr:
       return None
         
   def firstConfig(self):
+    if self.m_spi_config_list==None or len(self.m_spi_config_list) < 1:
+      self.m_config_ndx=None
+      self.m_config_count=0
+      return None
+    
     self.m_config_ndx=0
     self.m_config_count=len(self.m_spi_config_list)
     return self.getConfig(self.m_config_ndx)

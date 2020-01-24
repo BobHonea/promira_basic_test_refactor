@@ -7,6 +7,7 @@ import spi_io as spiio
 
 import spi_cfg_mgr as spicfg
 import cmd_protocol as protocol
+from _ast import If
 
 class eeprom:
   
@@ -107,7 +108,6 @@ class eeprom:
   
   def waitUntilNotBusy(self):
     while self.statusBusy():
-      print(",")
       continue
     return
   
@@ -247,3 +247,13 @@ class eeprom:
       
     self.m_testutil.fatalError("protect bitmap write failure")
   
+  
+  '''
+  setTargetPowerVoltages
+     Promira supplies two distinct power rails.
+     pins 2 and 4 (vtgt1, vtgt2) supply either 3.3 or 5.0 v
+     pins 22, and 24 (vtgt3, vtgt4) supply a voltage in the range 0.9 to 3.45 v
+     the latter takes a 32bit float, instead of an integer setting code.
+  '''
+
+    

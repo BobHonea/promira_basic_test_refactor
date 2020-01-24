@@ -302,7 +302,8 @@ class spiTransaction:
   m_prev_spi_phase= None
   m_testutil      = None
       
-  def __init__(self, spi_cmd, spi_cmd_descriptor:SpiCmdType):
+  def __init__(self, spi_cmd, spi_cmd_descriptor):
+    # ->SpiCmdType
     self.m_spi_read_not_write=spi_cmd[2]
     self.m_descriptor=spi_cmd_descriptor
     self.m_testutil=testutil.testUtil()
