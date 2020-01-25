@@ -13,6 +13,7 @@ class configVal:
   SPICLOCKMODE_3 = pmact.PS_SPI_MODE_3
   SPIBITORDER_MSB= pmact.PS_SPI_BITORDER_MSB
   SPIBITORDER_LSB= pmact.PS_SPI_BITORDER_LSB
+
   
   '''
   Chip Select Polarity Vector
@@ -28,26 +29,60 @@ class configVal:
   SPI_SS1_MASK=0x02
   SPI_SS2_MASK=0x04
   SPI_SS3_MASK=0x08
+
+  spiConfiguration  = coll.namedtuple('spiConfiguration', 
+                                      'clk_mode bit_order ss_polarity clk_kHz address_base' 
+                                      ' tgt_v1_fixed tgt_v2_variable' )
+  constraintList    = coll.namedtuple('constraintList', 
+                                      'values value_type' )
+  constraintRange   = coll.namedtuple('constraintRange', 
+                                      'min max value_type min_inclusive max_inclusive')
   
+  
+  spi_config_constraint=spiConfiguration(
+    clk_mode      = constraintList(values=[SPICLOCKMODE_0, SPICLOCKMODE_1,
+                                            SPICLOCKMODE_2, SPICLOCKMODE_3],
+                                   value_type=int),
+                                            
+    bit_order     = constraintList(values=[SPIBITORDER_LSB, SPIBITORDER_MSB],
+                                   value_type=int),
+    
+    ss_polarity   = constraintRange(min=SPI_SS_ALL_ACTIVE_LOW, max=SPI_SS_ALL_ACTIVE_HIGH,
+                                    value_type=int,
+                                    min_inclusive=True, max_inclusive=True),
+    
+    clk_kHz       = constraintRange(min=1000, max=80000,
+                                    value_type=int,
+                                    min_inclusive=True, max_inclusive=True),
+    
+    address_base  = constraintRange(min=0, max=0x10000,
+                                    value_type=int,
+                                    min_inclusive=True, max_inclusive=True),
+    
+    tgt_v1_fixed  = constraintList(values=[5.0, 3.3],
+                                    value_type=float),
+
+    tgt_v2_variable = constraintRange(min=0.9, max=3.45,
+                                     value_type=float,
+                                     min_inclusive=True, max_inclusive=True) )
+  
+  
+  
+  spi_config_options=spiConfiguration( 
+    clk_mode        = [SPICLOCKMODE_0], #,SPICLOCKMODE_3],
+    bit_order       = [SPIBITORDER_MSB],
+    ss_polarity     = [SPI_SS_ALL_ACTIVE_LOW],
+    clk_kHz         = [100 ], #, 250, 500, 1000, 6200, 12200, 18000], #, 23400, 28200, 32200, 35600],
+    address_base    = [0],   # [0, ... ,0x10000],
+    tgt_v1_fixed    = [None], #, [3.3, 5.0],
+    tgt_v2_variable = [None] )#[1.6, 1.8, 3.3 ])
+  pass
+
   
 
       
 
 class configMgr:
-
-
-  spi_configuration=coll.namedtuple('spi_configuration', 'clk_mode bit_order ss_polarity clk_kHz address_base target_v_fixed target_v_variable' )
-
-  spi_config_ranges=spi_configuration( 
-    clk_mode      = [configVal.SPICLOCKMODE_0,configVal.SPICLOCKMODE_3],
-    bit_order     = [configVal.SPIBITORDER_MSB],
-    ss_polarity   = [configVal.SPI_SS_ALL_ACTIVE_LOW],
-    clk_kHz       = [1000, 6200, 12200, 18000, 23400, 28200, 32200, 35600],
-    address_base  = [0], # 0x1000, 0x2000, 0x3000],
-    tgt_v_fixed   = [3.3, 5.0],  #  alternative: [1.6, 1.8]
-    tgt_v_variable= [1.6, 1.8, 3.3 ])
-  
-  m_spi_config_list=None
   
 
   '''
@@ -55,7 +90,7 @@ class configMgr:
     getconfig(index)
     firstConfig()
     nextConfig()
-        Config functions return spi_configuration namedtuple, or None if end of list
+        Config functions return spiConfiguration namedtuple, or None if end of list
        
     configCount()  : valid after firstConfig()
         Count of valid configurations
@@ -140,13 +175,13 @@ class configMgr:
         
       elif attrib_index==max_config_ndx:
         # spi_config is defined, store it
-        self.m_spi_config_list.append(self.spi_configuration._make(self.config_item_list))
+        self.m_spi_config_list.append(configVal.spiConfiguration._make(self.config_item_list))
         
       else:
         '''
         Modest Subtlety follows....
         '''
-        config_items=getattr(self.spi_config_ranges, self.spi_configuration._fields[attrib_index])
+        config_items=getattr(configVal.spi_config_options, configVal.spiConfiguration._fields[attrib_index])
         config_item_count=len(config_items)
         for item_index in range(config_item_count):
           this_value=config_items[item_index]
@@ -162,7 +197,7 @@ class configMgr:
       # PREVENT repeated initialization
       # It is possible to generate ZERO configurations (however unlikely)    
       self.m_spi_config_list=[]
-      max_config_ndx=len(self.spi_configuration._fields)
+      max_config_ndx=len(configVal.spiConfiguration._fields)
       fill_config_level(-1)
 
     return len(self.m_spi_config_list) > 0

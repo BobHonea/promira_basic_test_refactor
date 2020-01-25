@@ -7,7 +7,6 @@ import spi_io as spiio
 
 import spi_cfg_mgr as spicfg
 import cmd_protocol as protocol
-from _ast import If
 
 class eeprom:
   
@@ -141,8 +140,11 @@ class eeprom:
 
   def readDataDual(self, read_address, read_length, read_array):
 
-    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREAD,
-                                                           read_address, read_length, read_array)
+#    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREAD,
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREADX,
+                                                           read_address,
+                                                           read_length,
+                                                           read_array)
 
     result_length = spi_result.xfer_length
     

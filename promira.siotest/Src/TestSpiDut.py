@@ -68,6 +68,7 @@ import time
 
 
 
+
 #==========================================================================
 # CONSTANTS
 #==========================================================================
@@ -103,6 +104,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_config_mgr   = spicfg.configMgr()
     self.m_spi_msg      = pmmsg.promactMessages()
     self.m_eeprom       = eeprom.eeprom()
+    self.m_spiio       = self.m_eeprom.getobjectSpiIO()
 
     self.m_pagesize     = eeprom.eeprom.EEPROM_PAGE_SIZE
 
@@ -127,22 +129,24 @@ class promiraSpiTestApp(usertest.SwUserTest):
   def runTest(self):
 
 
-    self.m_txdata_array = self.m_testutil.nextRandomPageArray()
-    txdata_count = len(self.m_txdata_array)
+    txdata_array = self.m_testutil.firstRandomPageArray()
+    txdata_count = len(txdata_array)
     
 
     '''
     flags control test loop contents
     '''
     
-    verbose=False
-    write_data = True
+    verbose=True
+    write_data = False
     read_single_data=False
     read_dual_data=True
     eeprom_unlocked=False
 
+    first_loop=True
     spi_parameters = self.m_config_mgr.firstConfig()
-    self.m_spiio=self.m_eeprom.getobjectSpiIO()
+
+    page_address=0x1000
     
     for spi_config in self.m_config_mgr.m_spi_config_list:
     
@@ -150,25 +154,19 @@ class promiraSpiTestApp(usertest.SwUserTest):
       print(repr(spi_config))
       time.sleep(1)
       
+       
       if write_data:
-        self.m_txdata_array = self.m_testutil.nextRandomPageArray()
+        self.m_eeprom.testNOP()
+      
+        self.m_eeprom.readStatusRegister()
         
-        if False:
-          self.m_eeprom.testNOP()
+        self.m_eeprom.waitUntilNotBusy()
         
-          self.m_eeprom.readStatusRegister()
-          
-          self.m_eeprom.waitUntilNotBusy()
-          
-          self.m_eeprom.testJedec()
+        self.m_eeprom.testJedec()
       
 
-      '''
-      #self.eepromSpiTestQuadJedec()
-
-      '''
-    
-      if not eeprom_unlocked:
+      if write_data and not eeprom_unlocked:
+        
         if self.m_eeprom.readBlockProtectBitmap() == False:
           self.m_testutil.fatalError("Protect Bitmap Read Failed")
     
@@ -203,10 +201,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
             self.m_testutil.printArrayHexDump("ZEROED Protect Bitmap Array", block_protect_bitmap)
   
           if ( self.m_eeprom.writeBlockProtectBitmap()
-               and self.m_eeprom.readBlockProtectBitmap() ):
-               block_protect_bitmap = self.m_eeprom.getBlockProtectBitmap()
-               if verbose:
-                 self.m_testutil.printArrayHexDump("Post Update Protect Bitmap Array", block_protect_bitmap)
+            and self.m_eeprom.readBlockProtectBitmap() ):
+            block_protect_bitmap = self.m_eeprom.getBlockProtectBitmap()
+            if verbose:
+              self.m_testutil.printArrayHexDump("Post Update Protect Bitmap Array", block_protect_bitmap)
           else:
             self.m_testutil.fatalError("block protect bitmap acquisition failed")
 
@@ -216,8 +214,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
         if verbose:      
           self.m_testutil.printArrayHexDump("Unlocked Protect Bitmap Array", block_protect_bitmap)
         
-        txdata_array = self.m_testutil.nextRandomPageArray()
-        self.m_eeprom.updateWithinPage(0x1000, eeprom.eeprom.EEPROM_PAGE_SIZE, txdata_array)
+        self.m_eeprom.updateWithinPage(page_address, eeprom.eeprom.EEPROM_PAGE_SIZE, txdata_array)
         if verbose and not ( read_dual_data or read_single_data):
           self.m_testutil.printArrayHexDump("EEProm Written", txdata_array)
 
@@ -228,38 +225,36 @@ class promiraSpiTestApp(usertest.SwUserTest):
         
         self.m_eeprom.waitUntilNotBusy()
         
-        read_length = self.m_eeprom.readDataDual(0x1000, self.m_eeprom.EEPROM_PAGE_SIZE, dual_rxdata_array)
-
-        if write_data:
-          if verbose:
-            self.m_testutil.printArrayHexDump("EEProm Written", txdata_array)
+        read_length = self.m_eeprom.readDataDual(page_address, self.m_eeprom.EEPROM_PAGE_SIZE, dual_rxdata_array)
 
         if verbose:
+          print("Sector Address %x" % page_address)
+          self.m_testutil.printArrayHexDump("EEProm Written", txdata_array)
           self.m_testutil.printArrayHexDump("EEProm Dual-Read", dual_rxdata_array)
 
         if write_data: 
           for index in range(self.m_eeprom.EEPROM_PAGE_SIZE-4, self.m_eeprom.EEPROM_PAGE_SIZE):
-            if dual_rxdata_array[index] != txdata_array[index]:
-              print("write/read/compare fault at offset %02X " % index)
+            if self.m_testutil.cmpArray(txdata_array, dual_rxdata_array):
+              print("Dual Mode Read comparison fault" % index)
 
 
 
       if read_single_data:      
         rxdata_array = self.m_testutil.zeroedArray(self.m_eeprom.EEPROM_PAGE_SIZE)
         self.m_eeprom.waitUntilNotBusy()
-        read_length = self.m_eeprom.readData(0x1000, self.m_eeprom.EEPROM_PAGE_SIZE, rxdata_array)
+        read_length = self.m_eeprom.readData(page_address, self.m_eeprom.EEPROM_PAGE_SIZE, rxdata_array)
 
-        if write_data:
-          if verbose:
-            self.m_testutil.printArrayHexDump("EEProm Written", txdata_array)
 
         if verbose:
+          print("Sector Address %x" % page_address)
+          self.m_testutil.printArrayHexDump("EEProm Written", txdata_array)
           self.m_testutil.printArrayHexDump("EEProm Read", rxdata_array)
 
         if self.m_testutil.cmpArray(rxdata_array, txdata_array):
-          print("write/read compare failed")
+          print("Single Mode Read compare failed")
 
-      
+      #txdata_array = self.m_testutil.nextRandomPageArray()
+      #page_address+=self.m_eeprom.EEPROM_PAGE_SIZE
       time.sleep(2)
 
     print("Configuration Looptest Complete!")

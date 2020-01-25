@@ -6,9 +6,10 @@ import promira_py as pm
 import promactive_msg as pm_msg
 import array
 import test_utility as testutil
-from spi_cfg_mgr import configMgr
 import spi_cfg_mgr as spicfg
+from spi_cfg_mgr import configMgr, configVal
 import cmd_protocol as protocol
+
 
 
 
@@ -38,6 +39,8 @@ class spiIO:
   m_pm              = None
   m_app_name        = "com.totalphase.promact_is"
   m_promira_open    = None
+  m_device_ipstring = None
+  
   def __init__(self):
     self.m_pm_msg   = pm_msg.promactMessages()
     self.m_test_util= testutil.testUtil()    
@@ -96,14 +99,15 @@ class spiIO:
   
   
   def initSpiMaster(self, parameters):
-    
+    # (configVal.spiConfiguration)
     self.m_spi_parameters   = parameters
     self.m_spi_clk_kHz      = self.m_spi_parameters.clk_kHz
     self.m_spi_clk_mode     = parameters.clk_mode
     self.m_spi_ss_polarity  = parameters.ss_polarity
-    self.m_spi_target_vdd   = parameters.target_vdd
     self.m_spi_bit_order    = parameters.bit_order
     self.m_spi_address_base = parameters.address_base
+    self.m_spi_tgt_v1_fixed = parameters.tgt_v1_fixed
+    self.m_spi_tgt_v2_var   = parameters.tgt_v2_variable
 
     if self.m_promira_open != True:    
       self.devOpen(self.m_device_ipString)
@@ -111,8 +115,8 @@ class spiIO:
       
     pmact.ps_app_configure(self.m_channel_handle, pmact.PS_APP_CONFIG_SPI)
     
-    # Power the EEPROM using one of the VTGT supply pins
-    pmact.ps_phy_target_power(self.m_channel_handle, pmact.PS_PHY_TARGET_POWER_TARGET1_3V)  
+    # Power the target device with none, one or two power sources
+    self.setTargetpower(self.m_spi_tgt_v1_fixed, self.m_spi_tgt_v2_var)
 
     pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
     
@@ -126,38 +130,62 @@ class spiIO:
     
     return
   
-
-  def setTargetpower(self, vtgt_setting, variable_voltage_level):
-    
-    if type(variable_voltage_level)==float:
-      if 0.9 <= variable_voltage_level and 3.45>=variable_voltage_level:
-        # supported variable level
-        if vtgt_setting not in [pmact.PS_PHY_TARGET_POWER_TARGET2, pmact.PS_PHY_TARGET_POWER_BOTH]:
-          self.m_testutil.fatalError("unsupported target power settings")
-      pass
-    
-    if vtgt_setting==pmact.PS_PHY_TARGET_POWER_NONE:
-          # set no power and return
-      pass
-    elif ( vtgt_setting==pmact.PS_PHY_TARGET_POWER_TARGET1_3V
-          or vtgt_setting==pmact.PS_PHY_TARGET_POWER_TARGET1_5V):
-          # set fixed power and return
-      pass
-    elif vtgt_setting==pmact.PS_PHY_TARGET_POWER_TARGET2:
-          # set variable power only and return
-      pass
-    elif vtgt_setting==pmact.PS_PHY_TARGET_POWER_BOTH:
-        # set fixed and variable power and return
-      pass
-    else:
-      self.m_testutil.fatalError("unsupported power setting")
- 
- 
+  '''
+  setTargetPower
+  
+    The Promira Serial Platform Adapter permits setting two different
+    power sources:
+      fixed (pins 2, 4)
+      variable (level-shift-able) (pins 22, and 24).
       
-#    ps_phy_level_shift (PromiraChannelHandle channel,
-#                              f32                  level);
+    The fixed pins may be set to either 3.3 or 5.0 volts.
+    the variable source may be set to a single voltage in the range between
+    0.9 and 3.45 volts.
     
-    if vtgt_22_24==   
+    based on the expressed power requirements, program the Adapter.
+  '''
+
+  def setTargetpower(self, vtgt1_setting, vtgt2_variable_setting):
+    values=[3.3, 5.0]
+    fixed_codes=[pmact.PS_PHY_TARGET_POWER_TARGET1_3V, pmact.PS_PHY_TARGET_POWER_TARGET1_5V]
+    fixed_code=variable_voltage=None
+    
+    if vtgt1_setting==None and vtgt2_variable_setting==None:
+      # No power supplied
+      pmact.ps_phy_target_power(self.m_channel_handle, pmact.PS_PHY_TARGET_POWER_NONE)
+      return
+    
+    else:
+      if vtgt1_setting!=None:
+        # validate 
+        if vtgt1_setting in values:
+          index=values.index(vtgt1_setting)
+          fixed_code=fixed_codes[index]
+        else:
+          self.m_test_util.fatalError("unsupported tgt1 voltage")
+
+      if vtgt2_variable_setting!=None:
+        if (type(vtgt2_variable_setting)!=float  or
+          vtgt2_variable_setting < 0.9 or
+          vtgt2_variable_setting > 3.45 ):
+          self.m_test_util.fatalError("unsupported variable voltage setting")
+        else:
+          variable_voltage=vtgt2_variable_setting
+          
+      if variable_voltage != None: 
+        pmact.ps_phy_level_shift(self.m_channel_handle, variable_voltage)
+        pmact.ps_phy_target_power(self.m_channel_handle, pmact.PS_PHY_TARGET_POWER_TARGET2)
+        
+      if fixed_code != None:
+        pmact.ps_phy_target_power(self.m_channel_handle, fixed_code)
+        
+      
+      if fixed_code!=None and variable_voltage!=None:
+        pmact.ps_phy_target_power(self.m_channel_handle, pmact.PS_PHY_TARGET_POWER_BOTH)
+        pass
+
+      return
+ 
   
   
   
@@ -276,7 +304,7 @@ class spiIO:
       dataphase_readNotWrite=cmd_byte in self.READ_DATA_CMDS
     '''
     
-    #print("cmd_byte= ", hex(cmd_byte))
+    print("cmd_byte= ", hex(cmd_byte))
     
     session_queue = pmact.ps_queue_create(self.m_app_conn_handle,
                                           pmact.PS_MODULE_ID_SPI_ACTIVE)

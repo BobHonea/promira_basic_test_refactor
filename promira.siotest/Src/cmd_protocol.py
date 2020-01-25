@@ -60,6 +60,7 @@ noDummyPhase=DummyPhaseSpec(mode=SPIIO_NONE, length=0)
 oneCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=1)
 twoCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=2)
 threeCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=3)
+eightCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=8)
 
 '''
 Single Mode Data Phase Specs
@@ -133,6 +134,10 @@ SPICMDTYPE_19=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quad2
 SPICMDTYPE_1A=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=single2ByteAddrPhase, dummy=None, data=singleData_page)
 SPICMDTYPE_1B=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quad2ByteAddrPhase, dummy=None, data=quadData_page)
 
+SPICMDTYPE_1D=SpiCmdType(max_iowidth=SPIIO_DUAL, cmd=singleCmdPhase, address=singleAddrPhase, dummy=eightCycleDummyPhase, data=dualData_1plus)
+
+
+
 '''
 TODO!!!
 SDIOREAD is more complicated than SDOREAD
@@ -167,6 +172,7 @@ PHASE_SPECS_14 = [SPICMDTYPE_18]
 PHASE_SPECS_15 = [SPICMDTYPE_19]
 PHASE_SPECS_16 = [SPICMDTYPE_1A, SPICMDTYPE_1B]
 PHASE_SPECS_17 = [SPICMDTYPE_1C] # SDIOREAD
+PHASE_SPECS_18 = [SPICMDTYPE_1D] # SDOREADX
 
 NOP       =   0x00
 RSTEN     =   0x66
@@ -231,6 +237,7 @@ SPICMD_HSREAD     = [HSREAD,    [6, 7],       IOTYPE_READ]
 SPICMD_SQOREAD    = [SQOREAD,   7,            IOTYPE_READ]
 SPICMD_SQIOREAD   = [SQIOREAD,  6,            IOTYPE_READ]
 SPICMD_SDOREAD    = [SDOREAD,   7,            IOTYPE_READ]
+SPICMD_SDOREADX   = [SDOREAD,   0x18,           IOTYPE_READ]
 SPICMD_SDIOREAD   = [SDIOREAD,  7,            IOTYPE_READ]
 SPICMD_SETBURST   = [SETBURST,  8,            IOTYPE_WRITE]
 SPICMD_RBSQI_WRAP = [RBSQI_WRAP,9,            IOTYPE_READ]
@@ -267,7 +274,7 @@ SPI_CMDSPECS = [ SPICMD_NOP, SPICMD_RSTEN, SPICMD_RSTMEM,
                  SPICMD_CE, SPICMD_PP, SPICMD_QPP, SPICMD_WRSU,
                  SPICMD_WRRE, SPICMD_RBPR, SPICMD_WBPR, SPICMD_LBPR,
                  SPICMD_NVWLDR, SPICMD_ULBPR, SPICMD_RSID,
-                 SPICMD_PSID, SPICMD_LSID ] 
+                 SPICMD_PSID, SPICMD_LSID, SPICMD_SDOREADX ] 
 
 WREN_REQUIRED = [ SE, BE, CE, PP, WRSR, PSID, LSID, WBPR, LBPR,
                   ULBPR, NVWLDR, QPP, WRSR]
@@ -276,7 +283,7 @@ PHASE_SPECS = [ PHASE_SPECS_0, PHASE_SPECS_1, PHASE_SPECS_2, PHASE_SPECS_3, PHAS
               PHASE_SPECS_5, PHASE_SPECS_6, PHASE_SPECS_7, PHASE_SPECS_8, PHASE_SPECS_9,
               PHASE_SPECS_A, PHASE_SPECS_B, PHASE_SPECS_C, PHASE_SPECS_D, PHASE_SPECS_E,
               PHASE_SPECS_F, PHASE_SPECS_10, PHASE_SPECS_11, PHASE_SPECS_12,
-              PHASE_SPECS_13, PHASE_SPECS_14, PHASE_SPECS_15, PHASE_SPECS_16]
+              PHASE_SPECS_13, PHASE_SPECS_14, PHASE_SPECS_15, PHASE_SPECS_16, PHASE_SPECS_17, PHASE_SPECS_18]
 
 
  

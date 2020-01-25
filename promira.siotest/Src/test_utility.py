@@ -93,7 +93,10 @@ class testUtil:
         # array_label = "Random Page Array #%02X:" % index
         # self.printArrayHexDump(array_label, self.m_random_page_array_list[index])
           
-  
+  def firstRandomPageArray(self):
+    self.m_random_page_array_index=0
+    return self.m_random_page_array_list[0]
+    
   def nextRandomPageArray(self):
       self.m_random_page_array_index = (self.m_random_page_array_index + 1) % self.m_randarray_count
       return self.m_random_page_array_list[self.m_random_page_array_index]
