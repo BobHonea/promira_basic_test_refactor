@@ -8,6 +8,16 @@ import spi_io as spiio
 import spi_cfg_mgr as spicfg
 import cmd_protocol as protocol
 
+
+'''
+There are three types of EEPROMs targeted:
+   MT25QU256ABA   3V Supply Single/Dual/Quad I/0 64MB->2GB EEPROM
+   MT25QL128ABA 1.8V Supply Single/Dual/Quad I/0 64MB->2GB EEPROM
+   
+'''
+
+
+
 class eeprom:
   
   EEPROM_PROTECT_BITMAP_SIZE = 18
@@ -27,7 +37,41 @@ class eeprom:
   MEM_ADDRESS = 0
   MEM_BLOCKSIZE = 1
   MEM_BLOCKCOUNT = 2
+
+
   
+  PWR_3_3V = 3.3
+  PWR_1_8V = 1.8
+
+  
+  chip_mcn25QL=0
+  chip_mcn25QU=1
+  chip_mcc26VF=2
+  
+  chip_names=['Micron MT25QL128ABA', 'Micron MT25QU256ABA', 'Microchip SST26VF032B']
+  devConfig=coll.namedtuple('devConfig', 'jedec vdd memsize chipname')
+
+
+  mcn8MB3V3  =devConfig(jedec=[0xBF, 0x26, 0x42], vdd=3.3, memsize=0x400000, chipname=chip_mcc26VF)  
+  mcc1MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x17], vdd=3.3, memsize=0x100000, chipname=chip_mcn25QL)
+  mcc2MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x18], vdd=3.3, memsize=0x200000, chipname=chip_mcn25QL)
+  mcc4MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x19], vdd=3.3, memsize=0x400000, chipname=chip_mcn25QL)
+  mcc8MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x20], vdd=3.3, memsize=0x800000, chipname=chip_mcn25QL)
+  mcc16MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x21], vdd=3.3, memsize=0x1000000,chipname=chip_mcn25QL)
+  mcc32MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x22], vdd=3.3, memsize=0x2000000,chipname=chip_mcn25QL)
+  mcc1MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x17], vdd=1.8, memsize=0x100000, chipname=chip_mcn25QU)
+  mcc2MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x18], vdd=1.8, memsize=0x200000, chipname=chip_mcn25QU)
+  mcc4MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x19], vdd=1.8, memsize=0x400000, chipname=chip_mcn25QU)
+  mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chipname=chip_mcn25QU)
+  mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chipname=chip_mcn25QU)
+  mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chipname=chip_mcn25QU)
+              
+  eepromDevices=[mcn8MB3V3,
+                 mcc1MB3V3, mcc2MB3V3, mcc4MB3V3, mcc8MB3V3, mcc16MB3V3, mcc32MB3V3,
+                 mcc1MB1V8, mcc2MB1V8, mcc4MB1V8, mcc8MB1V8, mcc16MB1V8, mcc32MB1V8]
+
+            
+               
   EEPROM_BLOCKS = [[0x0, KB8, 4],
                  [0x8000, KB32, 1],
                  [0x10000, KB64, 31],
@@ -36,18 +80,47 @@ class eeprom:
                  [0x400000, 0, 0]]
   
   ENUMERATED_BLOCKS = []
+
   
-  m_testutil=None
+ 
+  '''
+  EESTATUS_BUSY1 and EESTATUS_W_ENABLE_LATCH are the same
+  status register bits for both Microchip and Micron devices.
+  '''
+  
+  EESTATUS_BUSY1 = 0x1
+  EESTATUS_W_ENABLE_LATCH = 0x2
+  '''
+  EESTATUS_W_SUSPEND_ERASE = 0x4
+  EESTATUS_W_SUSPEND_PROGRAM = 0x8
+  EESTATUS_W_PROTECT_LOCKDOWN = 0x10
+  EESTATUS_SECURITY_ID = 0x20
+  EESTATUS_RESERVED = 0x40
+  EESTATUS_BUSY80 = 0x80
+  '''
+  EESTATUS_READ_ERROR = 0x8000
+  
+  m_testutil  = None
+  m_jedec_id  = None
+  m_devconfig = None
+  m_spiio     = None
+
   
   def __init__(self):
     self.m_testutil     = testutil.testUtil()
     self.m_spiio        = spiio.spiIO()
     self.enumerateBlocks()
 
+
   
   def getobjectSpiIO(self):
     return self.m_spiio
   
+  
+  def configure(self):
+    self.testJedec()
+    
+    
   def enumerateBlocks(self):
     for blockset in self.EEPROM_BLOCKS:
       address = blockset[0]
@@ -71,12 +144,26 @@ class eeprom:
       print("error: jedec read")
       sys.exit()
 
-    jedec_id = [0xBF, 0x26, 0x42]
-    for index in range(len(jedec_id)):
-      if jedec_id[index] != rxdata_array[index]:
-        return False
+    return self.devConfigDefined(rxdata_array.tolist())
+  
+  '''
+  verify the JEDEC ID of the device is in the targeted
+  set of devices
+  '''
+
+  def devConfigDefined(self, jedec_id):
     
-    return True
+    for devconfig in self.eepromDevices:
+      dev_jedec=devconfig.jedec
+      
+      for index in range(3):
+        if dev_jedec[index]!=jedec_id[index]:
+          break
+        elif index==2:
+          self.m_devconfig=devconfig
+          return True
+
+    return False
 
   
   def testQuadJedec(self):
@@ -90,16 +177,6 @@ class eeprom:
   def testNOP(self):
     result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_NOP)
     return result==0
-  
-  EESTATUS_BUSY1 = 0x1
-  EESTATUS_W_ENABLE_LATCH = 0x2
-  EESTATUS_W_SUSPEND_ERASE = 0x4
-  EESTATUS_W_SUSPEND_PROGRAM = 0x8
-  EESTATUS_W_PROTECT_LOCKDOWN = 0x10
-  EESTATUS_SECURITY_ID = 0x20
-  EESTATUS_RESERVED = 0x40
-  EESTATUS_BUSY80 = 0x80
-  EESTATUS_READ_ERROR = 0x8000
   
   def statusBusy(self):
     self.readStatusRegister()

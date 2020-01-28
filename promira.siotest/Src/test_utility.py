@@ -4,9 +4,12 @@ import promact_is_py as pmact
 import spi_cfg_mgr as spicfg
 import eeprom
 import array
+import math
+from _random import Random
 
 class testUtil:
   m_instantiated=False
+  m_random=Random()
   m_randarray_count = 16  # arbitrary number
   m_random_page_array_index = 0
   m_random_page_array_list = []
@@ -19,11 +22,13 @@ class testUtil:
           print('Creating the testUtil object')
           cls._instance = super(testUtil, cls).__new__(cls)
           cls.m_page_size=eeprom.eeprom.EEPROM_PAGE_SIZE
-          cls.buildRandomPageArrays(cls)
+          cls.m_random=random.Random()
+          cls.m_random.seed(1)
+          cls.buildPageArrays(cls)
       return cls._instance
   
   def __singleton_init__(self, page_size=256):
-    random.seed(0)
+    self.m_random.seed(0)
     self.m_page_size=page_size
     self.buildRandomPageArrays()
   
@@ -59,7 +64,7 @@ class testUtil:
     reorder_indices=[]
     
     for index in range(element_count):
-      test_index=random.randint(0,element_count)
+      test_index=self.m_random.randint(0,element_count)
       if ordinals[test_index]==test_index:
         continue
       else:
@@ -77,19 +82,33 @@ class testUtil:
       return reordered_list
     pass
   
+
+  
+  def generatePatternedArray(self, array_size):
+    patterned_array=pmact.array_u08(array_size)
+    for index in range(array_size):
+      patterned_array[index] = int(256*math.sin(index*3.1416/256))
+    return patterned_array
+  
+      
   def generateRandomArray(self, array_size):
       rand_array = pmact.array_u08(array_size)
-      for index in range(1, array_size):
+      for index in range(array_size):
         rand_array[index] = random.randint(0, 255)
         
       return rand_array
-    
-
-  def buildRandomPageArrays(self):
+  
+  PATTERNED_ARRAYS=True
+  
+  def buildPageArrays(self):
       self.m_random_page_array_list = []
-      for index in range(self.m_randarray_count):
-        rand_array=self.generateRandomArray(self.m_page_size, self.m_page_size)   
-        self.m_random_page_array_list.append(rand_array)
+      for _index in range(self.m_randarray_count):
+        if self.PATTERNED_ARRAYS:
+          this_array=self.generatePatternedArray(self.m_page_size, self.m_page_size)
+        else:  
+          this_array=self.generateRandomArray(self.m_page_size, self.m_page_size)
+             
+        self.m_random_page_array_list.append(this_array)
         # array_label = "Random Page Array #%02X:" % index
         # self.printArrayHexDump(array_label, self.m_random_page_array_list[index])
           

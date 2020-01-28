@@ -65,6 +65,7 @@ import spi_cfg_mgr as spicfg
 import promactive_msg as pmmsg 
 import sys
 import time
+from _ast import Or
 
 
 
@@ -123,8 +124,20 @@ class promiraSpiTestApp(usertest.SwUserTest):
 # FUNCTION (APP)
 #==========================================================================
   
-  
+  def voltageOK(self, var, fixed, eeprom_vdd):
+    if fixed!=None:
+      print("Promira fixed voltage (VTGT1,2) is not allowed")
+      return True
 
+    elif var==None:
+        print("bench supply for eeprom and DUT")
+        return True
+    elif var==3.3 or (var >= 1.6 and var <=1.8):
+      print("eeprom vdd=%fv supplied by Promira" % var)
+      return True
+
+    print("configuration and eeprom vdd mismatch")
+    return False
   
   def runTest(self):
 
@@ -139,21 +152,36 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
     verbose=True
     write_data = False
-    read_single_data=False
+    read_single_data=True
     read_dual_data=True
     eeprom_unlocked=False
 
     first_loop=True
     spi_parameters = self.m_config_mgr.firstConfig()
 
-    page_address=0x1000
+    page_address=spi_parameters.address_base+0x1000
     
     for spi_config in self.m_config_mgr.m_spi_config_list:
     
       self.m_spiio.initSpiMaster(spi_config)
       print(repr(spi_config))
-      time.sleep(1)
+      '''
+      testJedec() forces device recognition
+      '''
       
+      self.m_eeprom.testJedec()
+      eepromConfig= self.m_eeprom.m_devconfig
+      '''
+      check to see that power is appropriate for the target
+      the variable voltage supplies the eeprom, which
+      can have a voltage range of 3.3v only, or 1.6 to 1.8V
+      '''
+      fixed=spi_config.tgt_v1_fixed
+      var=spi_config.tgt_v2_variable
+      
+
+      if not self.voltageOK(var, fixed, eepromConfig.vdd):
+        continue
        
       if write_data:
         self.m_eeprom.testNOP()

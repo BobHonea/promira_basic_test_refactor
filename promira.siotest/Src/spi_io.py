@@ -304,7 +304,7 @@ class spiIO:
       dataphase_readNotWrite=cmd_byte in self.READ_DATA_CMDS
     '''
     
-    print("cmd_byte= ", hex(cmd_byte))
+    #print("cmd_byte= ", hex(cmd_byte))
     
     session_queue = pmact.ps_queue_create(self.m_app_conn_handle,
                                           pmact.PS_MODULE_ID_SPI_ACTIVE)
