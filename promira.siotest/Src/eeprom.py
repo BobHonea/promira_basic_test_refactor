@@ -47,6 +47,8 @@ class eeprom:
   chip_mcn25QL=0
   chip_mcn25QU=1
   chip_mcc26VF=2
+  chip_mcn25QL_XX=3
+  chip_mcn25QU_XX=4
   
   chip_names=['Micron MT25QL128ABA', 'Micron MT25QU256ABA', 'Microchip SST26VF032B']
   devConfig=coll.namedtuple('devConfig', 'jedec vdd memsize chipname')
@@ -65,6 +67,8 @@ class eeprom:
   mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chipname=chip_mcn25QU)
   mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chipname=chip_mcn25QU)
   mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chipname=chip_mcn25QU)
+  gdmcc8MB3V3=devConfig(jedec=[0x41, 0x74, 0x30], vdd=3.3, memsize=0x800000, chipname=chip_mcn25QL_XX)
+  
               
   eepromDevices=[mcn8MB3V3,
                  mcc1MB3V3, mcc2MB3V3, mcc4MB3V3, mcc8MB3V3, mcc16MB3V3, mcc32MB3V3,
@@ -152,7 +156,10 @@ class eeprom:
   '''
 
   def devConfigDefined(self, jedec_id):
+    self.m_devconfig=self.gdmcc8MB3V3
+    return True
     
+  '''    
     for devconfig in self.eepromDevices:
       dev_jedec=devconfig.jedec
       
@@ -164,7 +171,7 @@ class eeprom:
           return True
 
     return False
-
+  '''
   
   def testQuadJedec(self):
     return self.doJedecTest(protocol.SPICMD_QUAD_JID)
@@ -218,7 +225,7 @@ class eeprom:
   def readDataDual(self, read_address, read_length, read_array):
 
 #    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREAD,
-    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREADX,
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SDOREAD,
                                                            read_address,
                                                            read_length,
                                                            read_array)

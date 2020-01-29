@@ -87,7 +87,7 @@ class testUtil:
   def generatePatternedArray(self, array_size):
     patterned_array=pmact.array_u08(array_size)
     for index in range(array_size):
-      patterned_array[index] = int(256*math.sin(index*3.1416/256))
+      patterned_array[index] =int(256*math.sin(index*3.141579/256))
     return patterned_array
   
       
@@ -147,15 +147,14 @@ class testUtil:
       print(linestring)
  
  
-  def cmpArray(self, array_a, array_b):
+  def arraysMatch(self, array_a, array_b):
     match=False
     if len(array_a) == len(array_b):
       for index in range (len(array_a)):
         if array_a[index]==array_b[index]:
           continue
         else:
-          match=False
-          break
-    return match
+          return False
+    return True
   
   pass

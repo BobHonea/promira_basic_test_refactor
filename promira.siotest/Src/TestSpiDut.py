@@ -152,7 +152,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
     verbose=True
     write_data = False
-    read_single_data=True
+    read_single_data=False
     read_dual_data=True
     eeprom_unlocked=False
 
@@ -259,11 +259,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
           print("Sector Address %x" % page_address)
           self.m_testutil.printArrayHexDump("EEProm Written", txdata_array)
           self.m_testutil.printArrayHexDump("EEProm Dual-Read", dual_rxdata_array)
-
-        if write_data: 
-          for index in range(self.m_eeprom.EEPROM_PAGE_SIZE-4, self.m_eeprom.EEPROM_PAGE_SIZE):
-            if self.m_testutil.cmpArray(txdata_array, dual_rxdata_array):
-              print("Dual Mode Read comparison fault" % index)
+          
+        if not self.m_testutil.arraysMatch(txdata_array, dual_rxdata_array):
+            print("Dual Mode Read comparison fault")
 
 
 
@@ -278,7 +276,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
           self.m_testutil.printArrayHexDump("EEProm Written", txdata_array)
           self.m_testutil.printArrayHexDump("EEProm Read", rxdata_array)
 
-        if self.m_testutil.cmpArray(rxdata_array, txdata_array):
+        if not self.m_testutil.arraysMatch(rxdata_array, txdata_array):
           print("Single Mode Read compare failed")
 
       #txdata_array = self.m_testutil.nextRandomPageArray()
