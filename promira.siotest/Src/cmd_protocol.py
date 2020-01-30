@@ -96,16 +96,16 @@ LengthSpec=namedtupleX("LengthSpec", "fixed rangeMin rangeMax", [None, None, Non
 
 
 
-dataSpec_1=LengthSpec(fixed=1, rangeMin=None, rangeMax=None)
-dataSpec_2=LengthSpec(fixed=2, rangeMin=None, rangeMax=None)
-dataSpec_3=LengthSpec(fixed=3, rangeMin=None, rangeMax=None)
-dataSpec_1plus=LengthSpec(fixed=None, rangeMin=1, rangeMax=None)
-dataSpec_2plus=LengthSpec(fixed=None, rangeMin=2, rangeMax=None)
-dataSpec_3plus=LengthSpec(fixed=None, rangeMin=3, rangeMax=None)
-dataSpec_page=LengthSpec(fixed=None, rangeMin=1, rangeMax=256)
-dataSpec_Nplus=LengthSpec(fixed=None, rangeMin=None, rangeMax=None)
-dataSpec_reg18=LengthSpec(fixed=None, rangeMin=1, rangeMax=18)
-dataSpec_2K=LengthSpec(fixed=None, rangeMin=1, rangeMax=2048)
+dataSpec_1=LengthSpec(fixed=1)
+dataSpec_2=LengthSpec(fixed=2)
+dataSpec_3=LengthSpec(fixed=3)
+dataSpec_1plus=LengthSpec(rangeMin=1)
+dataSpec_2plus=LengthSpec(rangeMin=2)
+dataSpec_3plus=LengthSpec(rangeMin=3)
+dataSpec_page=LengthSpec(rangeMin=1, rangeMax=256)
+dataSpec_Nplus=LengthSpec()
+dataSpec_reg18=LengthSpec(rangeMin=1, rangeMax=18)
+dataSpec_2K=LengthSpec(rangeMin=1, rangeMax=2048)
 
 
 SPIIO_NONE = None
