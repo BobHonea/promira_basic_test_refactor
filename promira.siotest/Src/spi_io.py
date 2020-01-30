@@ -43,7 +43,7 @@ class spiIO:
   
   def __init__(self):
     self.m_pm_msg   = pm_msg.promactMessages()
-    self.m_test_util= testutil.testUtil()    
+    self.m_testutil= testutil.testUtil()    
     self.m_cfg_mgr  = configMgr()
     
     self.m_ss_mask = 0x1
@@ -77,7 +77,7 @@ class spiIO:
       self.m_devices = return_tuple[2]
       self.m_device_ids = return_tuple[3]
       print("device_count:" + str(device_count))
-      self.m_device_ipString=self.m_test_util.ipString(self.m_device_ips[0])
+      self.m_device_ipString=self.m_testutil.ipString(self.m_device_ips[0])
       return True
     
     return False
@@ -162,13 +162,13 @@ class spiIO:
           index=values.index(vtgt1_setting)
           fixed_code=fixed_codes[index]
         else:
-          self.m_test_util.fatalError("unsupported tgt1 voltage")
+          self.m_testutil.fatalError("unsupported tgt1 voltage")
 
       if vtgt2_variable_setting!=None:
         if (type(vtgt2_variable_setting)!=float  or
           vtgt2_variable_setting < 0.9 or
           vtgt2_variable_setting > 3.45 ):
-          self.m_test_util.fatalError("unsupported variable voltage setting")
+          self.m_testutil.fatalError("unsupported variable voltage setting")
         else:
           variable_voltage=vtgt2_variable_setting
           
@@ -290,7 +290,7 @@ class spiIO:
 
 
     if self.m_spi_initialized != True:
-      self.m_test_util.fatalError("attempt to transact on uninitialized SPI bus")
+      self.m_testutil.fatalError("attempt to transact on uninitialized SPI bus")
         
     cmd_byte=spi_cmd[0]
     cmd_spec=protocol.precedentCmdSpec(spi_cmd)
@@ -391,7 +391,7 @@ class spiIO:
                                phase.length,
                                data_out)
 
-      #self.m_test_util.printArrayHexDump("addr: ", data_out)
+      #self.m_testutil.printArrayHexDump("addr: ", data_out)
 
         #pmact.ps_queue_spi_ss(session_queue, 0)
         

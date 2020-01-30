@@ -1,33 +1,111 @@
 from __future__ import division, with_statement, print_function
 import promact_is_py as pmact
-import collections
+import collections as coll
 from test_utility import testUtil
 import test_utility as testutil
 
 
+'''
+SPI Command Byte Codes
+'''
 
+NOP       =   0x00
+RSTEN     =   0x66
+RSTMEM    =   0x99
+ENQIO     =   0x38
+RSTQIO    =   0xFF
+RDSR      =   0x05
+WRSR      =   0x01
+RDCR      =   0x35
+READ      =   0x03
+HSREAD    =   0x0B
+SQOREAD   =   0x6B
+SQIOREAD  =   0xEB
+SDOREAD   =   0x3B
+SDIOREAD  =   0xBB
+SETBURST  =   0xC0
+RBSQI_WRAP=   0x0C
+RBSPI_WRAP=   0xEC
+JEDEC_ID  =   0x9F
+QUAD_JID  =   0xAF
+SFDP      =   0x5A
+WREN      =   0x06
+WRDI      =   0x04
+SE        =   0x20
+BE        =   0xD8
+CE        =   0xC7
+PP        =   0x02
+QPP       =   0x32
+WRSU      =   0xB0
+WRRE      =   0x30
+RBPR      =   0x72
+WBPR      =   0x42
+LBPR      =   0x8D
+NVWLDR    =   0xE8
+ULBPR     =   0x98
+RSID      =   0x88
+PSID      =   0xA5
+LSID      =   0x85  
+
+'''
+Command Categories
+'''
+
+IOTYPE_NONE = 0
+IOTYPE_READ = 1
+IOTYPE_WRITE= 2
+
+READ_DATA_CMDS  =   [RDSR, RDCR, READ, HSREAD, SQOREAD, SQIOREAD,
+                     SDOREAD, SDIOREAD, RBSQI_WRAP, RBSPI_WRAP,
+                     JEDEC_ID, QUAD_JID, SFDP, RBPR, RSID ]
+
+WRITE_DATA_CMDS =   [WRSR, SETBURST, PP, QPP, WBPR, NVWLDR, PSID]
+
+NODATA_CMDS     =   [NOP, RSTEN, RSTMEM, ENQIO, RSTQIO, WREN, WRDI, SE, BE, CE, ULBPR]
+
+WREN_REQUIRED   =   [ SE, BE, CE, PP, WRSR, PSID, LSID, WBPR, LBPR,
+                     ULBPR, NVWLDR, QPP, WRSR]
+
+
+
+'''
+Inherit namedtuple and extend with defaults
+for Python 2.7 onward
+'''
+def namedtupleX(typename, field_names, default_values=()):
+    T = coll.namedtuple(typename, field_names)
+    T.__new__.__defaults__ = (None,) * len(T._fields)
+    if isinstance(default_values, coll.Mapping):
+        prototype = T(**default_values)
+    else:
+        prototype = T(*default_values)
+    T.__new__.__defaults__ = tuple(prototype)
+    return T
 
 '''
 named tuples supporting command session management
 '''
-CmdPhaseSpec=collections.namedtuple("CmdPhaseSpec", "mode length")
-AddrPhaseSpec=collections.namedtuple("AddrPhaseSpec", "mode length")
-DummyPhaseSpec=collections.namedtuple("DummyPhaseSpec", "mode length")
-DataPhaseSpec=collections.namedtuple("DataPhaseSpec", "mode lengthSpec")
-SpiCmdType=collections.namedtuple("SpiCmdType", "max_iowidth cmd address dummy data")
+cmdPhx=coll.namedtuple("cmdPhx", "mode length")
+addrPhx=coll.namedtuple("addrPhx", "mode length")
+modePhx=coll.namedtuple("modePhx", "mode length")
+dummyPhx=coll.namedtuple("dummyPhx", "mode length")
+dataPhx=coll.namedtuple("dataPhx", "mode lengthSpec")
+SpiCmdSpec=namedtupleX("SpiCmdSpec", "iowMax cmd mode address dummy data", [None, None, None, None, None, None])
+
+LengthSpec=namedtupleX("LengthSpec", "fixed rangeMin rangeMax", [None, None, None])
 
 
-LengthSpec=collections.namedtuple("LengthSpec", "fixed rangeMin rangeMax")
-dlengthSpec_1=LengthSpec(fixed=1, rangeMin=None, rangeMax=None)
-dlengthSpec_2=LengthSpec(fixed=2, rangeMin=None, rangeMax=None)
-dlengthSpec_3=LengthSpec(fixed=3, rangeMin=None, rangeMax=None)
-dlengthSpec_1plus=LengthSpec(fixed=None, rangeMin=1, rangeMax=None)
-dlengthSpec_2plus=LengthSpec(fixed=None, rangeMin=2, rangeMax=None)
-dlengthSpec_3plus=LengthSpec(fixed=None, rangeMin=3, rangeMax=None)
-dlengthSpec_page=LengthSpec(fixed=None, rangeMin=1, rangeMax=256)
-dlengthSpec_Nplus=LengthSpec(fixed=None, rangeMin=None, rangeMax=None)
-dlengthSpec_reg18=LengthSpec(fixed=None, rangeMin=1, rangeMax=18)
-dlengthSpec_2K=LengthSpec(fixed=None, rangeMin=1, rangeMax=2048)
+
+dataSpec_1=LengthSpec(fixed=1, rangeMin=None, rangeMax=None)
+dataSpec_2=LengthSpec(fixed=2, rangeMin=None, rangeMax=None)
+dataSpec_3=LengthSpec(fixed=3, rangeMin=None, rangeMax=None)
+dataSpec_1plus=LengthSpec(fixed=None, rangeMin=1, rangeMax=None)
+dataSpec_2plus=LengthSpec(fixed=None, rangeMin=2, rangeMax=None)
+dataSpec_3plus=LengthSpec(fixed=None, rangeMin=3, rangeMax=None)
+dataSpec_page=LengthSpec(fixed=None, rangeMin=1, rangeMax=256)
+dataSpec_Nplus=LengthSpec(fixed=None, rangeMin=None, rangeMax=None)
+dataSpec_reg18=LengthSpec(fixed=None, rangeMin=1, rangeMax=18)
+dataSpec_2K=LengthSpec(fixed=None, rangeMin=1, rangeMax=2048)
 
 
 SPIIO_NONE = None
@@ -39,114 +117,116 @@ SPIIO_DUMMY= 1+max([SPIIO_SINGLE, SPIIO_DUAL, SPIIO_QUAD])
 '''
 Cmd Phase Specs
 '''
-singleCmdPhase=CmdPhaseSpec(mode=SPIIO_SINGLE, length=1)
-dualCmdPhase=CmdPhaseSpec(mode=SPIIO_DUAL, length=1)
-quadCmdPhase=CmdPhaseSpec(mode=SPIIO_QUAD, length=1)
+w1CmdPhase=cmdPhx(mode=SPIIO_SINGLE, length=1)
+w2CmdPhase=cmdPhx(mode=SPIIO_DUAL, length=1)
+w4CmdPhase=cmdPhx(mode=SPIIO_QUAD, length=1)
 
 '''
 Address Phase Specs
 '''
-singleAddrPhase=AddrPhaseSpec(mode=SPIIO_SINGLE, length=3)
-dualAddrPhase=AddrPhaseSpec(mode=SPIIO_DUAL, length=3)
-quadAddrPhase=AddrPhaseSpec(mode=SPIIO_QUAD, length=3)
-single2ByteAddrPhase=AddrPhaseSpec(mode=SPIIO_SINGLE, length=2)
-dual2ByteAddrPhase=AddrPhaseSpec(mode=SPIIO_DUAL, length=2)
-quad2ByteAddrPhase=AddrPhaseSpec(mode=SPIIO_QUAD, length=2)
+w1L3AddrPhase=addrPhx(mode=SPIIO_SINGLE, length=3)
+w2L3AddrPhase=addrPhx(mode=SPIIO_DUAL, length=3)
+w4L3AddrPhase=addrPhx(mode=SPIIO_QUAD, length=3)
+w1L2AddrPhase=addrPhx(mode=SPIIO_SINGLE, length=2)
+w2L2AddrPhase=addrPhx(mode=SPIIO_DUAL, length=2)
+w4L2AddrPhase=addrPhx(mode=SPIIO_QUAD, length=2)
+
+
+'''
+Mode Phase Specs
+'''
+w1ModePhase=modePhx(mode=SPIIO_SINGLE, length=1)
+w2ModePhase=modePhx(mode=SPIIO_DUAL, length=1)
+w4ModePhase=modePhx(mode=SPIIO_QUAD, length=1)
+
 
 '''
 Dummy Phase Specs
 '''
-noDummyPhase=DummyPhaseSpec(mode=SPIIO_NONE, length=0)
-oneCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=1)
-twoCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=2)
-threeCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=3)
-eightCycleDummyPhase=DummyPhaseSpec(mode=SPIIO_DUMMY, length=8)
+noDummyPhase=dummyPhx(mode=SPIIO_NONE, length=0)
+x1DummyPhase=dummyPhx(mode=SPIIO_DUMMY, length=1)
+x2DummyPhase=dummyPhx(mode=SPIIO_DUMMY, length=2)
+x3DummyPhase=dummyPhx(mode=SPIIO_DUMMY, length=3)
+x8DummyPhase=dummyPhx(mode=SPIIO_DUMMY, length=8)
 
 '''
 Single Mode Data Phase Specs
 '''
-singleData_1=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_1)
-singleData_2=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_2)
-singleData_3=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_3)
-singleData_1plus=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_1plus)
-singleData_2plus=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_2plus)
-singleData_3plus=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_3plus)
-singleData_page=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_page)
-singleData_Nplus=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_Nplus)
-singleData_reg18=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_reg18)
-singleData_2K=DataPhaseSpec(mode=SPIIO_SINGLE, lengthSpec=dlengthSpec_2K)
+w1Data_1=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_1)
+w1Data_2=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_2)
+w1Data_3=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_3)
+w1Data_1plus=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_1plus)
+w1Data_2plus=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_2plus)
+w1Data_3plus=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_3plus)
+w1Data_page=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_page)
+w1Data_Nplus=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_Nplus)
+w1Data_reg18=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_reg18)
+w1Data_2K=dataPhx(mode=SPIIO_SINGLE, lengthSpec=dataSpec_2K)
 
 '''
 Dual Mode Data Phase Specs
 '''
-dualData_1=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_1)
-dualData_2=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_2)
-dualData_3=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_3)
-dualData_1plus=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_1plus)
-dualData_2plus=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_2plus)
-dualData_3plus=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_3plus)
-dualData_page=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_page)
-dualData_Nplus=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_Nplus)
-dualData_reg18=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_reg18)
-dualData_2K=DataPhaseSpec(mode=SPIIO_DUAL, lengthSpec=dlengthSpec_2K)
+w2Data_1=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_1)
+w2Data_2=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_2)
+w2Data_3=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_3)
+w2Data_1plus=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_1plus)
+w2Data_2plus=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_2plus)
+w2Data_3plus=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_3plus)
+w2Data_page=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_page)
+w2Data_Nplus=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_Nplus)
+w2Data_reg18=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_reg18)
+w2Data_2K=dataPhx(mode=SPIIO_DUAL, lengthSpec=dataSpec_2K)
 '''
 Quad Mode Data Phase Specs
 '''
-quadData_1=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_1)
-quadData_2=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_2)
-quadData_3=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_3)
-quadData_1plus=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_1plus)
-quadData_2plus=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_2plus)
-quadData_3plus=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_3plus)
-quadData_page=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_page)
-quadData_Nplus=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_Nplus)
-quadData_reg18=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_reg18)
-quadData_2K=DataPhaseSpec(mode=SPIIO_QUAD, lengthSpec=dlengthSpec_2K)  
+w4Data_1=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_1)
+w4Data_2=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_2)
+w4Data_3=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_3)
+w4Data_1plus=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_1plus)
+w4Data_2plus=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_2plus)
+w4Data_3plus=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_3plus)
+w4Data_page=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_page)
+w4Data_Nplus=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_Nplus)
+w4Data_reg18=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_reg18)
+w4Data_2K=dataPhx(mode=SPIIO_QUAD, lengthSpec=dataSpec_2K)  
 
 
 
-SPICMDTYPE_00=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=None, dummy=None, data=None)
-SPICMDTYPE_01=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=None, dummy=None, data=None)
-SPICMDTYPE_02=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=None, dummy=None, data=singleData_1plus)
-SPICMDTYPE_03=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=None, dummy=None, data=quadData_1plus)
-SPICMDTYPE_04=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=None, dummy=None, data=singleData_2)
-SPICMDTYPE_05=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=None, dummy=None, data=quadData_2)
-SPICMDTYPE_06=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=singleAddrPhase, dummy=None, data=singleData_1plus)
-SPICMDTYPE_07=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=singleAddrPhase, dummy=threeCycleDummyPhase, data=quadData_1plus)
-SPICMDTYPE_08=SpiCmdType(max_iowidth=SPIIO_DUAL, cmd=singleCmdPhase, address=singleAddrPhase, dummy=oneCycleDummyPhase, data=dualData_1plus)
-SPICMDTYPE_09=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=None, dummy=None, data=singleData_1)
-SPICMDTYPE_0A=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=None, dummy=None, data=quadData_1)
-SPICMDTYPE_0B=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=singleAddrPhase, dummy=threeCycleDummyPhase, data=singleData_Nplus)
-SPICMDTYPE_0C=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quadAddrPhase, dummy=threeCycleDummyPhase, data=quadData_Nplus)
-SPICMDTYPE_0D=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=None, dummy=None, data=singleData_3plus)
-SPICMDTYPE_0E=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=None, dummy=None, data=quadData_3plus)
-SPICMDTYPE_0F=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quadAddrPhase, dummy=oneCycleDummyPhase, data=quadData_1plus)
-SPICMDTYPE_10=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=singleAddrPhase, dummy=oneCycleDummyPhase, data=singleData_1plus)
-SPICMDTYPE_11=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quadAddrPhase, dummy=oneCycleDummyPhase, data=quadData_1plus)
-SPICMDTYPE_12=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=singleAddrPhase, dummy=None, data=None)
-SPICMDTYPE_13=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quadAddrPhase, dummy=None, data=None)
-SPICMDTYPE_14=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=singleAddrPhase, dummy=None, data=singleData_page)
-SPICMDTYPE_15=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quadAddrPhase, dummy=None, data=quadData_page)  
-SPICMDTYPE_16=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=None, dummy=None, data=singleData_reg18)
-SPICMDTYPE_17=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=None, dummy=None, data=quadData_reg18)  
-SPICMDTYPE_18=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=single2ByteAddrPhase, dummy=oneCycleDummyPhase, data=singleData_2K)
-SPICMDTYPE_19=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quad2ByteAddrPhase, dummy=oneCycleDummyPhase, data=quadData_2K)
-SPICMDTYPE_1A=SpiCmdType(max_iowidth=SPIIO_SINGLE, cmd=singleCmdPhase, address=single2ByteAddrPhase, dummy=None, data=singleData_page)
-SPICMDTYPE_1B=SpiCmdType(max_iowidth=SPIIO_QUAD, cmd=quadCmdPhase, address=quad2ByteAddrPhase, dummy=None, data=quadData_page)
+SPICMDTYPE_00=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase)
+SPICMDTYPE_01=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase)
+SPICMDTYPE_02=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, data=w1Data_1plus)
+SPICMDTYPE_03=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, data=w4Data_1plus)
+SPICMDTYPE_04=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, data=w1Data_2)
+SPICMDTYPE_05=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, data=w4Data_2)
+SPICMDTYPE_06=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L3AddrPhase, data=w1Data_1plus)
+SPICMDTYPE_07=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w1L3AddrPhase, dummy=x3DummyPhase, data=w4Data_1plus)
+SPICMDTYPE_08=SpiCmdSpec(iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, address=w1L3AddrPhase, dummy=x1DummyPhase, data=w2Data_1plus)
+SPICMDTYPE_09=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, data=w1Data_1)
+SPICMDTYPE_0A=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, data=w4Data_1)
+SPICMDTYPE_0B=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L3AddrPhase, dummy=x3DummyPhase, data=w1Data_Nplus)
+SPICMDTYPE_0C=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L3AddrPhase, dummy=x3DummyPhase, data=w4Data_Nplus)
+SPICMDTYPE_0D=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, data=w1Data_3plus)
+SPICMDTYPE_0E=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, data=w4Data_3plus)
+SPICMDTYPE_0F=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L3AddrPhase, dummy=x1DummyPhase, data=w4Data_1plus)
+SPICMDTYPE_10=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L3AddrPhase, dummy=x1DummyPhase, data=w1Data_1plus)
+SPICMDTYPE_11=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L3AddrPhase, dummy=x1DummyPhase, data=w4Data_1plus)
+SPICMDTYPE_12=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L3AddrPhase)
+SPICMDTYPE_13=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L3AddrPhase)
+SPICMDTYPE_14=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L3AddrPhase, data=w1Data_page)
+SPICMDTYPE_15=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L3AddrPhase, data=w4Data_page)  
+SPICMDTYPE_16=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, data=w1Data_reg18)
+SPICMDTYPE_17=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, data=w4Data_reg18)  
+SPICMDTYPE_18=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L2AddrPhase, dummy=x1DummyPhase, data=w1Data_2K)
+SPICMDTYPE_19=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L2AddrPhase, dummy=x1DummyPhase, data=w4Data_2K)
+SPICMDTYPE_1A=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L2AddrPhase, data=w1Data_page)
+SPICMDTYPE_1B=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L2AddrPhase, data=w4Data_page)
+SPICMDTYPE_1C=SpiCmdSpec(iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, address=w2L3AddrPhase, data=w2Data_1plus)
+SPICMDTYPE_1D=SpiCmdSpec(iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, address=w1L3AddrPhase, dummy=x8DummyPhase, data=w2Data_1plus)
+SPICMDTYPE_1E=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, mode=w1ModePhase,      dummy=x1DummyPhase, data=w4Data_2)
 
-SPICMDTYPE_1D=SpiCmdType(max_iowidth=SPIIO_DUAL, cmd=singleCmdPhase, address=singleAddrPhase, dummy=eightCycleDummyPhase, data=dualData_1plus)
 
 
 
-'''
-TODO!!!
-SDIOREAD is more complicated than SDOREAD
-Figure out **for sure** how it is supposed to work.
-Not a priority now, so *TODO*
-'''
-# begin spec for SDIOREAD transaction
-SPICMDTYPE_1C=SpiCmdType(max_iowidth=SPIIO_DUAL, cmd=singleCmdPhase, address=dualAddrPhase, dummy=None, data=dualData_1plus)
-# end spec for SDIOREAD transaction  
 
 PHASE_SPECS_0 = [SPICMDTYPE_00]#, SPICMDTYPE_01]
 PHASE_SPECS_1 = [SPICMDTYPE_01]
@@ -173,55 +253,10 @@ PHASE_SPECS_15 = [SPICMDTYPE_19]
 PHASE_SPECS_16 = [SPICMDTYPE_1A, SPICMDTYPE_1B]
 PHASE_SPECS_17 = [SPICMDTYPE_1C] # SDIOREAD
 PHASE_SPECS_18 = [SPICMDTYPE_1D] # SDOREADX
-
-NOP       =   0x00
-RSTEN     =   0x66
-RSTMEM    =   0x99
-ENQIO     =   0x38
-RSTQIO    =   0xFF
-RDSR      =   0x05
-WRSR      =   0x01
-RDCR      =   0x35
-READ      =   0x03
-HSREAD    =   0x0B
-SQOREAD   =   0x6B
-SQIOREAD  =   0xEB
-SDOREAD   =   0x3B
-SDIOREAD  =   0xBB
-SETBURST  =   0xC0
-RBSQI_WRAP = 0x0C
-RBSPI_WRAP = 0xEC
-JEDEC_ID  =   0x9F
-QUAD_JID  =   0xAF
-SFDP      =   0x5A
-WREN      =   0x06
-WRDI      =   0x04
-SE        =   0x20
-BE        =   0xD8
-CE        =   0xC7
-PP        =   0x02
-QPP       =   0x32
-WRSU      =   0xB0
-WRRE      =   0x30
-RBPR      =   0x72
-WBPR      =   0x42
-LBPR      =   0x8D
-NVWLDR    =   0xE8
-ULBPR     =   0x98
-RSID      =   0x88
-PSID      =   0xA5
-LSID      =   0x85
-
-READ_DATA_CMDS =  [RDSR, RDCR, READ, HSREAD, SQOREAD, SQIOREAD,
-                  SDOREAD, SDIOREAD, RBSQI_WRAP, RBSPI_WRAP,
-                  JEDEC_ID, QUAD_JID, SFDP, RBPR, RSID ]
-WRITE_DATA_CMDS=  [WRSR, SETBURST, PP, QPP, WBPR, NVWLDR, PSID]
-NODATA_CMDS    =  [NOP, RSTEN, RSTMEM, ENQIO, RSTQIO, WREN, WRDI, SE, BE, CE, ULBPR]
+PHASE_SPECS_19 = [SPICMDTYPE_1E]
+PHASE_SPECS_1A = [SPICMDTYPE_10]
 
 
-IOTYPE_NONE = 0
-IOTYPE_READ = 1
-IOTYPE_WRITE= 2
 
 
 SPICMD_NOP        = [NOP,       0,            IOTYPE_NONE]
@@ -233,7 +268,7 @@ SPICMD_RDSR       = [RDSR,      [2, 3],       IOTYPE_READ]
 SPICMD_WRSR       = [WRSR,      4,            IOTYPE_WRITE]
 SPICMD_RDCR       = [RDCR,      [2, 3],       IOTYPE_READ]
 SPICMD_READ       = [READ,      5,            IOTYPE_READ]
-SPICMD_HSREAD     = [HSREAD,    [6, 7],       IOTYPE_READ]
+SPICMD_HSREAD     = [HSREAD,    [0x1A, 0x19],    IOTYPE_READ]
 SPICMD_SQOREAD    = [SQOREAD,   7,            IOTYPE_READ]
 SPICMD_SQIOREAD   = [SQIOREAD,  6,            IOTYPE_READ]
 SPICMD_SDOREAD    = [SDOREAD,   7,            IOTYPE_READ]
@@ -276,25 +311,15 @@ SPI_CMDSPECS = [ SPICMD_NOP, SPICMD_RSTEN, SPICMD_RSTMEM,
                  SPICMD_NVWLDR, SPICMD_ULBPR, SPICMD_RSID,
                  SPICMD_PSID, SPICMD_LSID, SPICMD_SDOREADX ] 
 
-WREN_REQUIRED = [ SE, BE, CE, PP, WRSR, PSID, LSID, WBPR, LBPR,
-                  ULBPR, NVWLDR, QPP, WRSR]
 
 PHASE_SPECS = [ PHASE_SPECS_0, PHASE_SPECS_1, PHASE_SPECS_2, PHASE_SPECS_3, PHASE_SPECS_4,
               PHASE_SPECS_5, PHASE_SPECS_6, PHASE_SPECS_7, PHASE_SPECS_8, PHASE_SPECS_9,
               PHASE_SPECS_A, PHASE_SPECS_B, PHASE_SPECS_C, PHASE_SPECS_D, PHASE_SPECS_E,
               PHASE_SPECS_F, PHASE_SPECS_10, PHASE_SPECS_11, PHASE_SPECS_12,
-              PHASE_SPECS_13, PHASE_SPECS_14, PHASE_SPECS_15, PHASE_SPECS_16, PHASE_SPECS_17, PHASE_SPECS_18]
+              PHASE_SPECS_13, PHASE_SPECS_14, PHASE_SPECS_15, PHASE_SPECS_16, PHASE_SPECS_17,
+              PHASE_SPECS_18, PHASE_SPECS_19, PHASE_SPECS_1A]
 
 
- 
-
-
-'''
-spi_master_multimode_cmd()
-
-  perform single-byte commands, data writing commands, data reading commands
-  up to 1 to 3 of 4 different transaction phases are implemented in a call
-'''
   
   
 class spiTransaction:
@@ -310,7 +335,7 @@ class spiTransaction:
   m_testutil      = None
       
   def __init__(self, spi_cmd, spi_cmd_descriptor):
-    # ->SpiCmdType
+    # ->SpiCmdSpec
     self.m_spi_read_not_write=spi_cmd[2]
     self.m_descriptor=spi_cmd_descriptor
     self.m_testutil=testutil.testUtil()
@@ -384,7 +409,7 @@ class spiTransaction:
     return self.m_spi_phase == self.m_descriptor.data
   
   def peakIoWidth(self):
-    return self.m_descriptor.max_iowidth
+    return self.m_descriptor.iowMax
   
   def phaseSpec(self):
     return self.m_spi_phases[self.m_phase_index]
@@ -444,7 +469,7 @@ def precedentCmdSpec(spi_cmd):
   
   for iomode in m_spiio_mode_precedence:
     for cmdspec in cmdspecs:
-      if cmdspec.max_iowidth==iomode:
+      if cmdspec.iowMax==iomode:
         return cmdspec
   
   testUtil().fatalError("io mode forbidden")

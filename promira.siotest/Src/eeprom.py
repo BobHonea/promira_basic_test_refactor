@@ -221,6 +221,19 @@ class eeprom:
     if data_in_length==read_length:
       return True
     self.m_testutil.fatalError("SpiReadData error")
+    
+
+  def highspeedReadData(self, read_address, read_length, read_array):
+
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_HSREAD,
+                                                            read_address, read_length, read_array)
+    data_in_length = spi_result.xfer_length
+    
+    if data_in_length==read_length:
+      return True
+    
+    self.m_testutil.fatalError("SpiReadData error")
+
 
   def readDataDual(self, read_address, read_length, read_array):
 
@@ -333,6 +346,51 @@ class eeprom:
       
     self.m_testutil.fatalError("protect bitmap write failure")
   
+  
+  def unlockDevice(self):
+
+    debug=False
+  
+    if self.readBlockProtectBitmap() == False:
+      self.m_testutil.fatalError("Protect Bitmap Read Failed")
+
+    block_protect_bitmap=self.getBlockProtectBitmap()
+          
+    if debug:
+      self.m_testutil.printArrayHexDump("Initial Protect Bitmap Array", block_protect_bitmap)
+
+    if self.globalUnlock() == False:
+      self.m_testutil.fatalError("Global Unlock Command Failed")
+      
+    if self.readBlockProtectBitmap() == False:
+      self.m_testutil.fatalError("Protect Bitmap Read Failed")
+      
+    self.getBlockProtectBitmap()
+    bitmap_sum = 0
+
+    for entry in block_protect_bitmap:
+      bitmap_sum += entry
+  
+    eeprom_unlocked= (bitmap_sum == 0)
+       
+    if not eeprom_unlocked:
+      #self.m_testutil.fatalError("Global Unlock Failed")
+      if debug:
+        self.m_testutil.printArrayHexDump("Unlocked Protect Bitmap Array", block_protect_bitmap)
+
+      self.setBlockProtectBitmap(self.m_testutil.zeroedArray(self.EEPROM_PROTECT_BITMAP_SIZE))
+      if debug:
+        self.m_testutil.printArrayHexDump("ZEROED Protect Bitmap Array", block_protect_bitmap)
+
+      if ( self.writeBlockProtectBitmap()
+        and self.readBlockProtectBitmap() ):
+        block_protect_bitmap = self.getBlockProtectBitmap()
+        if debug:
+          self.m_testutil.printArrayHexDump("Post Update Protect Bitmap Array", block_protect_bitmap)
+      else:
+        self.m_testutil.fatalError("block protect bitmap acquisition failed")
+
+        return True
   
   '''
   setTargetPowerVoltages
