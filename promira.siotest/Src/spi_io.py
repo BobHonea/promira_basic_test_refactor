@@ -237,6 +237,7 @@ class spiIO:
   
   def devCollect (self, collect):
 
+    response_length=0
 
     '''
     collect intermediate results until:
@@ -251,7 +252,7 @@ class spiIO:
     '''
     while True:
         t, _length, result = pmact.ps_collect_resp(collect, -1)
-        # self.m_pm_msg.showCollectResponseMsg(t)
+        self.m_pm_msg.showCollectResponseMsg(t)
         if t == pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT:
             break
         elif t < 0:
@@ -260,8 +261,8 @@ class spiIO:
           
         if t == pmact.PS_SPI_CMD_READ:
             _ret, _word_size, buf = pmact.ps_collect_spi_read(collect, result)
-            #print("PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf)))            #response_buf += buf
-            #response_length+= len(buf)
+            print("PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf)))            #response_buf += buf
+            response_length+= len(buf)
     
 #    return response_length, response_buf
     if buf==None:
@@ -304,7 +305,7 @@ class spiIO:
       dataphase_readNotWrite=cmd_byte in self.READ_DATA_CMDS
     '''
     
-    #print("cmd_byte= ", hex(cmd_byte))
+    print("cmd_byte= ", hex(cmd_byte))
     
     session_queue = pmact.ps_queue_create(self.m_app_conn_handle,
                                           pmact.PS_MODULE_ID_SPI_ACTIVE)

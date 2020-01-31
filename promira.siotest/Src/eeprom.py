@@ -16,7 +16,7 @@ There are three types of EEPROMs targeted:
    
 '''
 
-
+micronStatus=coll.namedtuple('micronStatus', 'flag_status nv_config v_config   enh_v_config')
 
 class eeprom:
   
@@ -50,24 +50,23 @@ class eeprom:
   chip_mcn25QL_XX=3
   chip_mcn25QU_XX=4
   
-  chip_names=['Micron MT25QL128ABA', 'Micron MT25QU256ABA', 'Microchip SST26VF032B']
-  devConfig=coll.namedtuple('devConfig', 'jedec vdd memsize chipname')
+  devConfig=coll.namedtuple('devConfig', 'jedec vdd memsize chip_id mfgr chip_type')
 
-
-  mcn8MB3V3  =devConfig(jedec=[0xBF, 0x26, 0x42], vdd=3.3, memsize=0x400000, chipname=chip_mcc26VF)  
-  mcc1MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x17], vdd=3.3, memsize=0x100000, chipname=chip_mcn25QL)
-  mcc2MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x18], vdd=3.3, memsize=0x200000, chipname=chip_mcn25QL)
-  mcc4MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x19], vdd=3.3, memsize=0x400000, chipname=chip_mcn25QL)
-  mcc8MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x20], vdd=3.3, memsize=0x800000, chipname=chip_mcn25QL)
-  mcc16MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x21], vdd=3.3, memsize=0x1000000,chipname=chip_mcn25QL)
-  mcc32MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x22], vdd=3.3, memsize=0x2000000,chipname=chip_mcn25QL)
-  mcc1MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x17], vdd=1.8, memsize=0x100000, chipname=chip_mcn25QU)
-  mcc2MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x18], vdd=1.8, memsize=0x200000, chipname=chip_mcn25QU)
-  mcc4MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x19], vdd=1.8, memsize=0x400000, chipname=chip_mcn25QU)
-  mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chipname=chip_mcn25QU)
-  mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chipname=chip_mcn25QU)
-  mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chipname=chip_mcn25QU)
-  gdmcc8MB3V3=devConfig(jedec=[0x41, 0x74, 0x30], vdd=3.3, memsize=0x800000, chipname=chip_mcn25QL_XX)
+  
+  mcn8MB3V3  =devConfig(jedec=[0xBF, 0x26, 0x42], vdd=3.3, memsize=0x400000, chip_id=chip_mcc26VF, mfgr='Microchip', chip_type='SST26VF032B')  
+  mcc1MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x17], vdd=3.3, memsize=0x100000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
+  mcc2MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x18], vdd=3.3, memsize=0x200000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
+  mcc4MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x19], vdd=3.3, memsize=0x400000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
+  mcc8MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x20], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
+  mcc16MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x21], vdd=3.3, memsize=0x1000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
+  mcc32MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x22], vdd=3.3, memsize=0x2000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
+  mcc1MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x17], vdd=1.8, memsize=0x100000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
+  mcc2MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x18], vdd=1.8, memsize=0x200000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
+  mcc4MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x19], vdd=1.8, memsize=0x400000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
+  mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
+  mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
+  mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
+  gdmcc8MB3V3=devConfig(jedec=[0x41, 0x74, 0x30], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')
   
               
   eepromDevices=[mcn8MB3V3,
@@ -108,6 +107,7 @@ class eeprom:
   m_jedec_id  = None
   m_devconfig = None
   m_spiio     = None
+  m_micron_status = None
 
   
   def __init__(self):
@@ -156,10 +156,8 @@ class eeprom:
   '''
 
   def devConfigDefined(self, jedec_id):
-    self.m_devconfig=self.gdmcc8MB3V3
-    return True
-    
-  '''    
+#    self.m_devconfig=self.gdmcc8MB3V3
+#    return True
     for devconfig in self.eepromDevices:
       dev_jedec=devconfig.jedec
       
@@ -171,7 +169,6 @@ class eeprom:
           return True
 
     return False
-  '''
   
   def testQuadJedec(self):
     return self.doJedecTest(protocol.SPICMD_QUAD_JID)
@@ -179,7 +176,6 @@ class eeprom:
   def testJedec(self):
     return self.doJedecTest(protocol.SPICMD_JEDEC_ID)
   
-
             
   def testNOP(self):
     result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_NOP)
@@ -211,6 +207,38 @@ class eeprom:
     
     self.m_testutil.fatalError("ReadStatusRegister error")
     return self.EESTATUS_READ_ERROR
+  
+  def nvConfigStatus(self,mask, shift):
+    if self.m_micron_status==None:
+      self.readMicronStatusRegisters()
+    return (self.m_micron_status.nv_config & mask) >> shift
+    
+  
+  def dtrStatus(self):
+    return self.nvConfigStatus(0b00100000, 5)
+  
+  def dualStatus(self):
+    return self.nvConfigStatus(0b10, 1)
+  
+  def quadStatus(self):
+    return self.nvConfigStatus(0b1, 0)
+  
+  def readMicronStatusRegisters(self):
+    status_val=array.ArrayType('B', [0])
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RFLAG, None, 1, status_val)
+    flagstatus=status_val[0]
+    
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RNVCFG, None, 1, status_val)
+    nvconfig= status_val[0]
+    
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RVCFG, None, 1, status_val)
+    vconfig=status_val[0]
+    
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RENHVCFG, None, 1, status_val)
+    enhvconfig=status_val[0]
+    
+    self.m_micron_status=micronStatus(flag_status=flagstatus, nv_config=nvconfig, v_config=vconfig, enh_v_config=enhvconfig)
+    return self.m_micron_status
     
   def readData(self, read_address, read_length, read_array):
 

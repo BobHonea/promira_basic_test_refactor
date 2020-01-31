@@ -198,9 +198,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
     verbose=True
     write_data = True
-    read_single_data=False
+    read_single_data=True
     read_dual_data=True
-    read_hispeed_data=False
+    read_hispeed_data=True
     eeprom_unlocked=False
 
     _first_loop=True
@@ -211,13 +211,33 @@ class promiraSpiTestApp(usertest.SwUserTest):
     for spi_config in self.m_config_mgr.m_spi_config_list:
     
       self.m_spiio.initSpiMaster(spi_config)
-      print(repr(spi_config))
+
+
+
       '''
       testJedec() forces device recognition
       '''
       
       self.m_eeprom.testJedec()
       eepromConfig= self.m_eeprom.m_devconfig
+      
+      mfgrname=eepromConfig.mfgr
+      chipname=eepromConfig.chip_type
+      print("EEPROM Device: "+mfgrname+" "+chipname  )
+      print("Memory Size = " + str(eepromConfig.memsize/(1024*1024))+" MB")
+      print(repr(spi_config))
+
+#      if mfgrname=='Micron':
+      micronstatus=self.m_eeprom.readMicronStatusRegisters()
+      print(repr(micronstatus))
+      
+      dtr_status=not self.m_eeprom.dtrStatus()
+      dual_status=not self.m_eeprom.dualStatus()
+      quad_status=not self.m_eeprom.quadStatus()
+      
+      print("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
+      
+            
       '''
       check to see that power is appropriate for the target
       the variable voltage supplies the eeprom, which
@@ -241,6 +261,14 @@ class promiraSpiTestApp(usertest.SwUserTest):
         self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
 
             
+
+
+      if read_hispeed_data:      
+          self.readTest(protocol.HSREAD, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
+
+      if read_single_data:      
+          self.readTest(protocol.READ, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
+
       if read_dual_data:
           self.readTest(protocol.SDOREAD, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
 
@@ -249,6 +277,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
       if read_single_data:      
           self.readTest(protocol.READ, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
+
+      if read_dual_data:
+          self.readTest(protocol.SDOREAD, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
 
       time.sleep(2)
 

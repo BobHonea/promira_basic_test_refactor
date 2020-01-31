@@ -45,7 +45,14 @@ NVWLDR    =   0xE8
 ULBPR     =   0x98
 RSID      =   0x88
 PSID      =   0xA5
-LSID      =   0x85  
+LSID      =   0x85
+'''
+Micron Instructions
+'''  
+RNVCFG    =   0xB5
+RFLAG     =   0x70
+RVCFG     =   0x85
+RENHVCFG  =   0x65
 
 '''
 Command Categories
@@ -90,12 +97,11 @@ addrPhx=coll.namedtuple("addrPhx", "mode length")
 modePhx=coll.namedtuple("modePhx", "mode length")
 dummyPhx=coll.namedtuple("dummyPhx", "mode length")
 dataPhx=coll.namedtuple("dataPhx", "mode lengthSpec")
+
 SpiCmdSpec=namedtupleX("SpiCmdSpec", "iowMax cmd mode address dummy data", [None, None, None, None, None, None])
 
-LengthSpec=namedtupleX("LengthSpec", "fixed rangeMin rangeMax", [None, None, None])
 
-
-
+LengthSpec=namedtupleX("LengthSpec", "fixed burstMode rangeMin rangeMax", [None, False, None, None])
 dataSpec_1=LengthSpec(fixed=1)
 dataSpec_2=LengthSpec(fixed=2)
 dataSpec_3=LengthSpec(fixed=3)
@@ -103,7 +109,7 @@ dataSpec_1plus=LengthSpec(rangeMin=1)
 dataSpec_2plus=LengthSpec(rangeMin=2)
 dataSpec_3plus=LengthSpec(rangeMin=3)
 dataSpec_page=LengthSpec(rangeMin=1, rangeMax=256)
-dataSpec_Nplus=LengthSpec()
+dataSpec_Nplus=LengthSpec(burstMode=True)
 dataSpec_reg18=LengthSpec(rangeMin=1, rangeMax=18)
 dataSpec_2K=LengthSpec(rangeMin=1, rangeMax=2048)
 
@@ -297,6 +303,18 @@ SPICMD_ULBPR      = [ULBPR,     0,            IOTYPE_NONE]
 SPICMD_RSID       = [RSID,      [0x14, 0x15], IOTYPE_READ]
 SPICMD_PSID       = [PSID,      0x16,         IOTYPE_WRITE]
 SPICMD_LSID       = [LSID,      0,            IOTYPE_NONE]
+SPICMD_RFLAG      = [RFLAG,     2,            IOTYPE_READ]
+SPICMD_RNVCFG     = [RNVCFG,    2,            IOTYPE_READ]
+SPICMD_RVCFG      = [RVCFG,     2,            IOTYPE_READ]
+SPICMD_RENHVCFG   = [RENHVCFG,  2,            IOTYPE_READ]
+
+
+#READ FLAG STATUS REGISTER 70h 1-0-1 2-0-2 4-0-4 0 0 0 0 1 to ∞ –
+#READ NONVOLATILE CONFIGURATION REGISTER B5h 1-0-1 2-0-2 4-0-4 0 0 0 0 2 to ∞ –
+#READ VOLATILE CONFIGURATION REGISTER 85h 1-0-1 2-0-2 4-0-4 0 0 0 0 1 to ∞ –
+#READ ENHANCED VOLATILE CONFIGURATION REGISTER 65h 1-0-1 2-0-2 4-0-4 0 0 0 0 1 to ∞ –
+
+
 
 SPI_CMDSPECS = [ SPICMD_NOP, SPICMD_RSTEN, SPICMD_RSTMEM,
                  SPICMD_ENQIO, SPICMD_RSTQIO, SPICMD_RDSR,
