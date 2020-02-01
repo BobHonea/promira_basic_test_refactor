@@ -234,7 +234,7 @@ class spiIO:
     self.devClose()
 
 
-  
+  debug_devCollect = False
   def devCollect (self, collect):
 
     response_length=0
@@ -252,17 +252,24 @@ class spiIO:
     '''
     while True:
         t, _length, result = pmact.ps_collect_resp(collect, -1)
-        self.m_pm_msg.showCollectResponseMsg(t)
+        #****DEBUG****
+        if self.debug_devCollect:
+          self.m_pm_msg.showCollectResponseMsg(t)
+        #****DEBUG****  
         if t == pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT:
             break
         elif t < 0:
             print(pmact.ps_app_status_string(t))
-            continue
+            self.m_testutil.fatalError("devCollect: Promira Reported Error")
           
         if t == pmact.PS_SPI_CMD_READ:
             _ret, _word_size, buf = pmact.ps_collect_spi_read(collect, result)
-            print("PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf)))            #response_buf += buf
+            #****DEBUG****
+            if self.debug_devCollect:
+              print("PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf)))
+            #****DEBUG****
             response_length+= len(buf)
+            #response_buf += buf
     
 #    return response_length, response_buf
     if buf==None:
@@ -305,7 +312,10 @@ class spiIO:
       dataphase_readNotWrite=cmd_byte in self.READ_DATA_CMDS
     '''
     
-    print("cmd_byte= ", hex(cmd_byte))
+    #****DEBUG****
+    if self.debug_devCollect:
+      print("cmd_byte= ", hex(cmd_byte))
+    #****DEBUG****
     
     session_queue = pmact.ps_queue_create(self.m_app_conn_handle,
                                           pmact.PS_MODULE_ID_SPI_ACTIVE)

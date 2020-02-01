@@ -72,6 +72,8 @@ from cairo._cairo import Pattern
 
 
 
+
+
 #==========================================================================
 # CONSTANTS
 #==========================================================================
@@ -127,18 +129,30 @@ class promiraSpiTestApp(usertest.SwUserTest):
 #==========================================================================
   
   def voltageOK(self, var, fixed, eeprom_vdd):
+
     if fixed!=None:
-      print("Promira fixed voltage (VTGT1,2) is not allowed")
+      print("Promira DUT voltage supply (VTGT1,2) is not allowed")
       return True
 
     elif var==None:
-        print("bench supply for eeprom and DUT")
+        print("Bench "+str(eeprom_vdd)+"V power supply required for eeprom")
         return True
-    elif var==3.3 or (var >= 1.6 and var <=1.8):
-      print("eeprom vdd=%fv supplied by Promira" % var)
-      return True
+      
+    elif var==3.3:
+      if eeprom_vdd==3.3:
+        print("EEPROM vdd="+str(var)+"V supplied by Promira")
+        return True
+      
+      else:
+        print("EEPROM vdd="+str(eeprom_vdd)+"V, supply by Promira is "+str(var)+"V: MISMATCH")
+        return False
 
-    print("configuration and eeprom vdd mismatch")
+    elif eeprom_vdd==1.8:
+        if var>=1.6 and var<=1.8:
+          print("EEPROM vdd="+str(eeprom_vdd)+"V, supply by Promira is "+str(var)+"V: OK")
+          return True
+          
+    print("Promira Supply and EEPROM vdd mismatch")
     return False
   
   
@@ -157,34 +171,35 @@ class promiraSpiTestApp(usertest.SwUserTest):
       
     for page in range(page_count):
       page_address=start_page_address+(page * self.m_eeprom.EEPROM_PAGE_SIZE)
-      self.m_eeprom.updateWithinPage(page_address, eeprom.eeprom.EEPROM_PAGE_SIZE, Pattern)
+      self.m_eeprom.updateWithinPage(page_address, eeprom.eeprom.EEPROM_PAGE_SIZE, pattern_array)
 
   
-  def readTest(self, read_cmd_byte, address, length, pattern_array, verbose):
+  def readTest(self, read_cmd_byte, cmd_namestring, address, length, pattern_array, verbose):
     rxdata_array = self.m_testutil.zeroedArray(self.m_eeprom.EEPROM_PAGE_SIZE)
     self.m_eeprom.waitUntilNotBusy()
-    
+
     if read_cmd_byte==protocol.READ:
-      readtype="Read"
       _read_length = self.m_eeprom.readData(address, length, rxdata_array)
 
     if read_cmd_byte==protocol.HSREAD:
-      readtype="HighSpeedRead"
       _read_length = self.m_eeprom.highspeedReadData(address, length, rxdata_array)
 
     if read_cmd_byte==protocol.SDOREAD:
-      readtype="DualIoRead"
       _read_length = self.m_eeprom.readDataDual(address, length, rxdata_array)
 
 
-    if verbose:
-      print("Sector Address %x" % address)
-      self.m_testutil.printArrayHexDump("EEProm %s" % readtype, rxdata_array)
-      
-    if not self.m_testutil.arraysMatch(pattern_array, rxdata_array):
-        print("%s comparison fault" % readtype)
 
-        
+      
+    if not self.m_testutil.arraysMatch(rxdata_array, pattern_array):
+        print("%s comparison fault" % cmd_namestring)
+        if verbose:
+          print("Sector Address %x" % address)
+
+          self.m_testutil.printArrayHexDumpWithErrors("EEProm %s" % cmd_namestring, rxdata_array, pattern_array)
+          
+        return False
+    return True
+  
   def runTest(self):
 
 
@@ -197,57 +212,56 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     
     verbose=True
-    write_data = True
+    write_data = False
     read_single_data=True
     read_dual_data=True
     read_hispeed_data=True
     eeprom_unlocked=False
 
-    _first_loop=True
+    first_loop=True
     spi_parameters = self.m_config_mgr.firstConfig()
-
-    page_address=spi_parameters.address_base+0x1000
+    self.m_spiio.initSpiMaster(spi_parameters)
+    '''
+    testJedec() forces device recognition
+    '''
     
-    for spi_config in self.m_config_mgr.m_spi_config_list:
+    self.m_eeprom.testJedec()
+    eepromConfig= self.m_eeprom.m_devconfig
     
-      self.m_spiio.initSpiMaster(spi_config)
-
-
-
-      '''
-      testJedec() forces device recognition
-      '''
-      
-      self.m_eeprom.testJedec()
-      eepromConfig= self.m_eeprom.m_devconfig
-      
-      mfgrname=eepromConfig.mfgr
-      chipname=eepromConfig.chip_type
-      print("EEPROM Device: "+mfgrname+" "+chipname  )
-      print("Memory Size = " + str(eepromConfig.memsize/(1024*1024))+" MB")
-      print(repr(spi_config))
+    mfgrname=eepromConfig.mfgr
+    chipname=eepromConfig.chip_type
+    memsize_MB=eepromConfig.memsize/(1024*1024)
+    print("EEPROM Type: "+ mfgrname + " "+ chipname  )
+    print("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V")
 
 #      if mfgrname=='Micron':
-      micronstatus=self.m_eeprom.readMicronStatusRegisters()
-      print(repr(micronstatus))
-      
-      dtr_status=not self.m_eeprom.dtrStatus()
-      dual_status=not self.m_eeprom.dualStatus()
-      quad_status=not self.m_eeprom.quadStatus()
-      
-      print("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
-      
+    micronstatus=self.m_eeprom.readMicronStatusRegisters()
+    print(repr(micronstatus))
+    
+    dtr_status=not self.m_eeprom.dtrStatus()
+    dual_status=not self.m_eeprom.dualStatus()
+    quad_status=not self.m_eeprom.quadStatus()
+    
+    print("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
+    
+    
+    page_address=spi_parameters.address_base+0x1000
+    
+    for spi_parameters in self.m_config_mgr.m_spi_config_list:
+      print(repr(spi_parameters))
+      self.m_spiio.initSpiMaster(spi_parameters)
+
             
       '''
       check to see that power is appropriate for the target
       the variable voltage supplies the eeprom, which
       can have a voltage range of 3.3v only, or 1.6 to 1.8V
       '''
-      fixed=spi_config.tgt_v1_fixed
-      var=spi_config.tgt_v2_variable
-      
+      fixed=spi_parameters.tgt_v1_fixed
+      var=spi_parameters.tgt_v2_variable
 
       if not self.voltageOK(var, fixed, eepromConfig.vdd):
+        print("CONFIGURATION SKIPPED/NOT TESTED")
         continue
       
 
@@ -257,30 +271,34 @@ class promiraSpiTestApp(usertest.SwUserTest):
       if write_data:
         self.m_eeprom.updateWithinPage(page_address, eeprom.eeprom.EEPROM_PAGE_SIZE, txdata_array)
 
-      if verbose:
+      if verbose and first_loop:
         self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
 
             
+      read_commands=[[read_hispeed_data, protocol.HSREAD, "High Speed Read"],
+                     [read_single_data, protocol.READ, "Read"],
+                     [read_dual_data, protocol.SDOREAD, "Dual Output Read"]]
+      
+      test_failed=False
+      maxloop=4
+      for command in read_commands:
+      
+        for loop in range(maxloop):
+          if command[0]==True:
+            test_failed=not self.readTest(command[1], command[2], page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
+            if test_failed:
+              print("subtest iteration #"+str(loop+1)+" of "+str(maxloop)+" failed")
+              break
+            elif loop==(maxloop-1):
+              print("success: subtest (0x%02x) %s" % (command[1], command[2]))
+              
+            time.sleep(.5)  #10 ms sleep
 
+        if test_failed:
+          break                                                                                 
 
-      if read_hispeed_data:      
-          self.readTest(protocol.HSREAD, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
+      if test_failed:
+        break
 
-      if read_single_data:      
-          self.readTest(protocol.READ, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
-
-      if read_dual_data:
-          self.readTest(protocol.SDOREAD, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
-
-      if read_hispeed_data:      
-          self.readTest(protocol.HSREAD, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
-
-      if read_single_data:      
-          self.readTest(protocol.READ, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
-
-      if read_dual_data:
-          self.readTest(protocol.SDOREAD, page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
-
-      time.sleep(2)
-
+      first_loop=False
     print("Configuration Looptest Complete!")

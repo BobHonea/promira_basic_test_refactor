@@ -69,10 +69,10 @@ class configVal:
     clk_mode        = [SPICLOCKMODE_0], #,SPICLOCKMODE_3],
     bit_order       = [SPIBITORDER_MSB],
     ss_polarity     = [SPI_SS_ALL_ACTIVE_LOW],
-    clk_kHz         = [5000], #, 2000, 5000, 10000, 20000, 25000, 30000, 40000, 4500, 50000, 55000 ,60000],
+    clk_kHz         = [250, 350, 450, 650, 750, 1000, 2000, 4000, 5000], #, 2500, 7500, 10000, 20000, 25000, 27000, 29000, 30000, 31000, 32000, 40000, 45000, 50000, 55000 ,60000],
     address_base    = [0],   # [0, ... ,0x10000],
     tgt_v1_fixed    = [None], #, [3.3, 5.0],
-    tgt_v2_variable = [None])#[1.6, 1.8, 3.3 ])
+    tgt_v2_variable = [1.8])#[1.6, 1.8, 3.3 ])
   pass
 
   

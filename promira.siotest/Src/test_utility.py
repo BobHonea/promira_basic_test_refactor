@@ -128,11 +128,11 @@ class testUtil:
       return
     
     bytes_per_line = 32
-    print(label + " [ %03X bytes ]")
     array_size = len(data_array)
     array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
     dump_bytes = array_size
     dump_index = 0
+    print("%s [ 0x%x bytes ]" % (label, array_size))
     for line in range(array_lines):
       linestart = line * bytes_per_line
       linestring = " %02X : " % linestart
@@ -147,6 +147,86 @@ class testUtil:
       print(linestring)
  
  
+ 
+  '''
+  printArrayHexDumpWithErrors
+    Dump an array in rows of fixed length.
+    Include between rows of array_a, annotated values
+    of array_b where they differ with array_a.
+  '''  
+
+  def printArrayHexDumpWithErrors(self, label, data_array, pattern_array):
+
+    '''
+    diffLine
+      compares two arrays
+      if equal, returns True and Null String
+      else, returns False and Text with Annotated differing hex values
+    '''
+    def printDiffLine(array_a, array_b):
+      diff_indices=[]
+      if len(array_a) == len(array_b):
+        for index in range (len(array_a)):
+          if array_a[index]==array_b[index]:
+            continue
+          else:
+            diff_indices.append(index)
+
+      if len(diff_indices)>0:
+        diff_text=['   ',]*len(array_a)
+        last_index=-2
+        for index in diff_indices:
+          reference=array_b[index]
+          if index==last_index+1:
+            diff_text[index]="-%02x"%reference
+          else:
+            diff_text[index]=">%02x"%reference
+          last_index=index
+          
+        print('      '+''.join(diff_text))
+        return False
+      
+      else:
+        return True, ''
+    
+    
+    if not type(data_array)==array.ArrayType or len(data_array)==0:
+      print("Hexdump:  array is empty")
+      return
+    
+    bytes_per_line = 32
+    array_size = len(data_array)
+    array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
+    dump_bytes = array_size
+    dump_index = 0
+    print("%s [ 0x%x bytes ]" % (label, array_size))
+    
+    for line in range(array_lines):
+      line_start = line * bytes_per_line
+      line_string = " %02X : " % line_start
+      if dump_bytes >= bytes_per_line:
+        line_bytes = bytes_per_line
+      else:
+        line_bytes = dump_bytes
+      
+      line_end=line_start+bytes_per_line
+      data_sub_array=data_array[line_start:line_end]
+      pattern_sub_array=pattern_array[line_start:line_end]
+      pattern_match=self.arraysMatch(data_sub_array, pattern_sub_array)
+
+      if not pattern_match:
+        print("")
+        
+      for dump_index in range(dump_index, dump_index + line_bytes):
+        value = data_array[dump_index]
+        line_string = line_string + " %02X" % value
+      
+      print(line_string)
+      if not pattern_match:
+        printDiffLine(data_array[line_start:line_end], pattern_array[line_start:line_end])
+        
+  pass
+ 
   def arraysMatch(self, array_a, array_b):
     match=False
     if len(array_a) == len(array_b):
@@ -156,5 +236,4 @@ class testUtil:
         else:
           return False
     return True
-  
   pass

@@ -66,8 +66,8 @@ class eeprom:
   mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
   mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
   mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-  gdmcc8MB3V3=devConfig(jedec=[0x41, 0x74, 0x30], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')
-  
+  gdmcc8MB3V3=devConfig(jedec=[0xAF, 0x04, 0xCC], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')
+  gdmcc32MB1V8=devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')  
               
   eepromDevices=[mcn8MB3V3,
                  mcc1MB3V3, mcc2MB3V3, mcc4MB3V3, mcc8MB3V3, mcc16MB3V3, mcc32MB3V3,
@@ -153,11 +153,17 @@ class eeprom:
   '''
   verify the JEDEC ID of the device is in the targeted
   set of devices
+  SAVE recognized JEDEC ID
   '''
-
+  hard_code_jedec = True
+  
   def devConfigDefined(self, jedec_id):
-#    self.m_devconfig=self.gdmcc8MB3V3
-#    return True
+    if self.hard_code_jedec:
+      self.m_devconfig=self.gdmcc32MB1V8
+      #self.m_devconfig=self.gdmcc8MB3V3
+      self.m_jedec_id=self.m_devconfig.jedec
+      return True
+
     for devconfig in self.eepromDevices:
       dev_jedec=devconfig.jedec
       
@@ -166,8 +172,10 @@ class eeprom:
           break
         elif index==2:
           self.m_devconfig=devconfig
+          self.m_jedec_id=devconfig.jedec
           return True
 
+    self.m_jedec_id=None
     return False
   
   def testQuadJedec(self):
