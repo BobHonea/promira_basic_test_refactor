@@ -4,21 +4,10 @@ import sys
 import promact_is_py as pmact
 import collections as coll
 import spi_io as spiio
-
-import spi_cfg_mgr as spicfg
 import cmd_protocol as protocol
+import eeprom_devices
 
-
-'''
-There are three types of EEPROMs targeted:
-   MT25QU256ABA   3V Supply Single/Dual/Quad I/0 64MB->2GB EEPROM
-   MT25QL128ABA 1.8V Supply Single/Dual/Quad I/0 64MB->2GB EEPROM
-   
-'''
-
-micronStatus=coll.namedtuple('micronStatus', 'flag_status nv_config v_config   enh_v_config')
-
-class eeprom:
+class eepromAPI:
   
   EEPROM_PROTECT_BITMAP_SIZE = 18
   EEPROM_PAGE_SIZE = 0x100
@@ -44,34 +33,7 @@ class eeprom:
   PWR_1_8V = 1.8
 
   
-  chip_mcn25QL=0
-  chip_mcn25QU=1
-  chip_mcc26VF=2
-  chip_mcn25QL_XX=3
-  chip_mcn25QU_XX=4
-  
-  devConfig=coll.namedtuple('devConfig', 'jedec vdd memsize chip_id mfgr chip_type')
 
-  
-  mcn8MB3V3  =devConfig(jedec=[0xBF, 0x26, 0x42], vdd=3.3, memsize=0x400000, chip_id=chip_mcc26VF, mfgr='Microchip', chip_type='SST26VF032B')  
-  mcc1MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x17], vdd=3.3, memsize=0x100000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-  mcc2MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x18], vdd=3.3, memsize=0x200000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-  mcc4MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x19], vdd=3.3, memsize=0x400000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-  mcc8MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x20], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-  mcc16MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x21], vdd=3.3, memsize=0x1000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-  mcc32MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x22], vdd=3.3, memsize=0x2000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-  mcc1MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x17], vdd=1.8, memsize=0x100000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-  mcc2MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x18], vdd=1.8, memsize=0x200000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-  mcc4MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x19], vdd=1.8, memsize=0x400000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-  mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-  mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-  mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-  gdmcc8MB3V3=devConfig(jedec=[0xAF, 0x04, 0xCC], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')
-  gdmcc32MB1V8=devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')  
-              
-  eepromDevices=[mcn8MB3V3,
-                 mcc1MB3V3, mcc2MB3V3, mcc4MB3V3, mcc8MB3V3, mcc16MB3V3, mcc32MB3V3,
-                 mcc1MB1V8, mcc2MB1V8, mcc4MB1V8, mcc8MB1V8, mcc16MB1V8, mcc32MB1V8]
 
             
                
@@ -154,13 +116,19 @@ class eeprom:
   verify the JEDEC ID of the device is in the targeted
   set of devices
   SAVE recognized JEDEC ID
+  predefine the target eeprom + configuration if the jedec 
+  id cannot be read.
   '''
-  hard_code_jedec = True
+  m_hard_code_eeprom_config = False
   
+  def hardSetTgtEEPROM(self, eeprom_configuration):
+    if eeprom_configuration != None:
+      self.m_hard_code_eeprom_config = True
+      self.m_devconfig = eeprom_configuration
+    
+
   def devConfigDefined(self, jedec_id):
-    if self.hard_code_jedec:
-      self.m_devconfig=self.gdmcc32MB1V8
-      #self.m_devconfig=self.gdmcc8MB3V3
+    if self.m_hard_code_eeprom_config:
       self.m_jedec_id=self.m_devconfig.jedec
       return True
 
@@ -245,7 +213,7 @@ class eeprom:
     _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RENHVCFG, None, 1, status_val)
     enhvconfig=status_val[0]
     
-    self.m_micron_status=micronStatus(flag_status=flagstatus, nv_config=nvconfig, v_config=vconfig, enh_v_config=enhvconfig)
+    self.m_micron_status=eeprom_devices.micronStatus(flag_status=flagstatus, nv_config=nvconfig, v_config=vconfig, enh_v_config=enhvconfig)
     return self.m_micron_status
     
   def readData(self, read_address, read_length, read_array):

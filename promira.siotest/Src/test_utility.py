@@ -1,8 +1,7 @@
 import random
 import sys
 import promact_is_py as pmact
-import spi_cfg_mgr as spicfg
-import eeprom
+
 import array
 import math
 from _random import Random
@@ -13,7 +12,7 @@ class testUtil:
   m_randarray_count = 16  # arbitrary number
   m_random_page_array_index = 0
   m_random_page_array_list = []
-  m_page_size=None
+  m_page_size=256  # eeprom page size (universal)
 
   _instance=None
   
@@ -21,7 +20,6 @@ class testUtil:
       if cls._instance is None:
           print('Creating the testUtil object')
           cls._instance = super(testUtil, cls).__new__(cls)
-          cls.m_page_size=eeprom.eeprom.EEPROM_PAGE_SIZE
           cls.m_random=random.Random()
           cls.m_random.seed(1)
           cls.buildPageArrays(cls)

@@ -6,9 +6,8 @@ import promira_py as pm
 import promactive_msg as pm_msg
 import array
 import test_utility as testutil
-import spi_cfg_mgr as spicfg
-from spi_cfg_mgr import configMgr, configVal
 import cmd_protocol as protocol
+#from spi_cfg_mgr import configMgr
 
 
 
@@ -44,7 +43,7 @@ class spiIO:
   def __init__(self):
     self.m_pm_msg   = pm_msg.promactMessages()
     self.m_testutil= testutil.testUtil()    
-    self.m_cfg_mgr  = configMgr()
+    #self.m_configMgr  = configMgr()
     
     self.m_ss_mask = 0x1
     self.m_device = None
@@ -53,7 +52,7 @@ class spiIO:
     self.m_device_ips = pmact.array_u32(4)
     self.m_device_status = pmact.array_u32(4)
 
-    self.m_spi_configuration = self.m_cfg_mgr.firstConfig()
+    self.m_spi_configuration = None #self.m_configMgr.firstConfig()
     self.m_timeout_ms = 1000  # arbitrary 10 second value 
 
     self.discoverDevice()

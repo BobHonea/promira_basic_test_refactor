@@ -57,17 +57,13 @@ from __future__ import division, with_statement, print_function
 #==========================================================================
 import usertest
 import promact_is_py as pmact
-import eeprom
+from eeprom import eepromAPI
 import cmd_protocol as protocol
-import test_utility as testutil
-import spi_io as spiio
 import spi_cfg_mgr as spicfg
+import test_utility as testutil
 import promactive_msg as pmmsg 
-import sys
 import time
-from _ast import Or
-from cmd_protocol import SPICMD_READ, SPICMD_HSREAD
-from cairo._cairo import Pattern
+
 
 
 
@@ -100,7 +96,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
   m_txdata_array  = None
   m_random_page_array = None
   m_pagesize      = None
-  m_eeprom        = None
+  m_eepromAPI        = None
   m_instantiator  = None
 
   
@@ -108,10 +104,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_testutil     = testutil.testUtil()
     self.m_config_mgr   = spicfg.configMgr()
     self.m_spi_msg      = pmmsg.promactMessages()
-    self.m_eeprom       = eeprom.eeprom()
-    self.m_spiio       = self.m_eeprom.getobjectSpiIO()
+    self.m_eepromAPI    = eepromAPI()
+    self.m_spiio       = self.m_eepromAPI.getobjectSpiIO()
 
-    self.m_pagesize     = eeprom.eeprom.EEPROM_PAGE_SIZE
+    self.m_pagesize     = eepromAPI.EEPROM_PAGE_SIZE
 
     block_protect_bitmap  = pmact.array_u08(18)
     self.m_rxdata_array           = pmact.array_u08(self.m_pagesize)
@@ -157,35 +153,35 @@ class promiraSpiTestApp(usertest.SwUserTest):
   
   
   def writeDevicePattern(self, start_page_address, length, device_byte_size, pattern_array):
-    if start_page_address % self.m_eeprom.EEPROM_PAGE_SIZE != 0:
+    if start_page_address % self.m_eepromAPI.EEPROM_PAGE_SIZE != 0:
       self.m_testutil.fatalError("illegal page address")
     
-    if length % self.m_eeprom.EEPROM_PAGE_SIZE != 0:
+    if length % self.m_eepromAPI.EEPROM_PAGE_SIZE != 0:
       self.m_testutil.fatalError("illegal page fill length")
       
-    start_page=start_page_address/self.m_eeprom.EEPROM_PAGE_SIZE
-    page_count=length/self.m_eeprom.EEPROM_PAGE_SIZE
+    start_page=start_page_address/self.m_eepromAPI.EEPROM_PAGE_SIZE
+    page_count=length/self.m_eepromAPI.EEPROM_PAGE_SIZE
     
-    if start_page+page_count > (device_byte_size/self.m_eeprom.EEPROM_PAGE_SIZE):
+    if start_page+page_count > (device_byte_size/self.m_eepromAPI.EEPROM_PAGE_SIZE):
       self.m_testutil.fatalError("write request too large")
       
     for page in range(page_count):
-      page_address=start_page_address+(page * self.m_eeprom.EEPROM_PAGE_SIZE)
-      self.m_eeprom.updateWithinPage(page_address, eeprom.eeprom.EEPROM_PAGE_SIZE, pattern_array)
+      page_address=start_page_address+(page * self.m_eepromAPI.EEPROM_PAGE_SIZE)
+      self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, pattern_array)
 
   
   def readTest(self, read_cmd_byte, cmd_namestring, address, length, pattern_array, verbose):
-    rxdata_array = self.m_testutil.zeroedArray(self.m_eeprom.EEPROM_PAGE_SIZE)
-    self.m_eeprom.waitUntilNotBusy()
+    rxdata_array = self.m_testutil.zeroedArray(self.m_eepromAPI.EEPROM_PAGE_SIZE)
+    self.m_eepromAPI.waitUntilNotBusy()
 
     if read_cmd_byte==protocol.READ:
-      _read_length = self.m_eeprom.readData(address, length, rxdata_array)
+      _read_length = self.m_eepromAPI.readData(address, length, rxdata_array)
 
     if read_cmd_byte==protocol.HSREAD:
-      _read_length = self.m_eeprom.highspeedReadData(address, length, rxdata_array)
+      _read_length = self.m_eepromAPI.highspeedReadData(address, length, rxdata_array)
 
     if read_cmd_byte==protocol.SDOREAD:
-      _read_length = self.m_eeprom.readDataDual(address, length, rxdata_array)
+      _read_length = self.m_eepromAPI.readDataDual(address, length, rxdata_array)
 
 
 
@@ -221,12 +217,27 @@ class promiraSpiTestApp(usertest.SwUserTest):
     first_loop=True
     spi_parameters = self.m_config_mgr.firstConfig()
     self.m_spiio.initSpiMaster(spi_parameters)
+    
     '''
-    testJedec() forces device recognition
+    if the test configuration specifies an eeprom configuration,
+    set the eeprom configuration to the eeprom api.
+    
+    the configuration provides configuration in cases that the
+    jedec id is unreadable.
+    
     '''
     
-    self.m_eeprom.testJedec()
-    eepromConfig= self.m_eeprom.m_devconfig
+    if spi_parameters.eeprom_config!=None:
+      self.m_eepromAPI.hardSetTgtEEPROM(spi_parameters.eeprom_config)
+    
+    '''
+    testJedec() forces device recognition
+    when hard set, this will use the configuration set by
+    hardsetTgtEEPROM().    
+    '''
+    
+    self.m_eepromAPI.testJedec()
+    eepromConfig= self.m_eepromAPI.m_devconfig
     
     mfgrname=eepromConfig.mfgr
     chipname=eepromConfig.chip_type
@@ -235,12 +246,12 @@ class promiraSpiTestApp(usertest.SwUserTest):
     print("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V")
 
 #      if mfgrname=='Micron':
-    micronstatus=self.m_eeprom.readMicronStatusRegisters()
+    micronstatus=self.m_eepromAPI.readMicronStatusRegisters()
     print(repr(micronstatus))
     
-    dtr_status=not self.m_eeprom.dtrStatus()
-    dual_status=not self.m_eeprom.dualStatus()
-    quad_status=not self.m_eeprom.quadStatus()
+    dtr_status=not self.m_eepromAPI.dtrStatus()
+    dual_status=not self.m_eepromAPI.dualStatus()
+    quad_status=not self.m_eepromAPI.quadStatus()
     
     print("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
     
@@ -266,10 +277,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
       
 
       if write_data and (not eeprom_unlocked):
-        eeprom_unlocked=self.m_eeprom.unlockDevice()
+        eeprom_unlocked=self.m_eepromAPI.unlockDevice()
         
       if write_data:
-        self.m_eeprom.updateWithinPage(page_address, eeprom.eeprom.EEPROM_PAGE_SIZE, txdata_array)
+        self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, txdata_array)
 
       if verbose and first_loop:
         self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
@@ -285,14 +296,14 @@ class promiraSpiTestApp(usertest.SwUserTest):
       
         for loop in range(maxloop):
           if command[0]==True:
-            test_failed=not self.readTest(command[1], command[2], page_address, self.m_eeprom.EEPROM_PAGE_SIZE, txdata_array, verbose)
+            test_failed=not self.readTest(command[1], command[2], page_address, self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
             if test_failed:
               print("subtest iteration #"+str(loop+1)+" of "+str(maxloop)+" failed")
               break
             elif loop==(maxloop-1):
               print("success: subtest (0x%02x) %s" % (command[1], command[2]))
               
-            time.sleep(.5)  #10 ms sleep
+            time.sleep(.01)  #10 ms sleep
 
         if test_failed:
           break                                                                                 
