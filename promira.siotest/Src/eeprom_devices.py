@@ -29,8 +29,8 @@ mcc4MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x19], vdd=1.8, memsize=0x400000, chip_
 mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
 mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
 mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-gdmcc8MB3V3=devConfig(jedec=[0xAF, 0x04, 0xCC], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')
-gdmcc32MB1V8=devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')  
+gdmcc8MB3V3=devConfig(jedec=[0xFF, 0x00, 0x01], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')
+gdmcc32MB1V8=devConfig(jedec=[0xFF, 0x00, 0x02], vdd=1.8, memsize=0x2000000, chip_id=chip_mcn25QL_XX, mfgr='Google', chip_type='Unknown')  
             
 eepromDevices=[mcn8MB3V3,
                mcc1MB3V3, mcc2MB3V3, mcc4MB3V3, mcc8MB3V3, mcc16MB3V3, mcc32MB3V3,

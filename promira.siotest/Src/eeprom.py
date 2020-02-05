@@ -2,7 +2,7 @@ import array
 import test_utility as testutil
 import sys
 import promact_is_py as pmact
-import collections as coll
+
 import spi_io as spiio
 import cmd_protocol as protocol
 import eeprom_devices
@@ -132,7 +132,7 @@ class eepromAPI:
       self.m_jedec_id=self.m_devconfig.jedec
       return True
 
-    for devconfig in self.eepromDevices:
+    for devconfig in eeprom_devices.eepromDevices:
       dev_jedec=devconfig.jedec
       
       for index in range(3):
@@ -254,11 +254,11 @@ class eepromAPI:
     self.m_testutil.fatalError("SpiReadDual error")    
 
 
-
+  '''
   def writeEnable(self):
     spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WREN)
     return spi_result.success
-
+  '''
   
   def readBlockProtectBitmap(self):
     self.m_block_protect_bitmap = pmact.array_u08(18)

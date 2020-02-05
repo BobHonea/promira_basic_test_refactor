@@ -5,6 +5,8 @@ from test_utility import testUtil
 import test_utility as testutil
 
 
+
+
 '''
 SPI Command Byte Codes
 '''
@@ -71,7 +73,7 @@ WRITE_DATA_CMDS =   [WRSR, SETBURST, PP, QPP, WBPR, NVWLDR, PSID]
 NODATA_CMDS     =   [NOP, RSTEN, RSTMEM, ENQIO, RSTQIO, WREN, WRDI, SE, BE, CE, ULBPR]
 
 WREN_REQUIRED   =   [ SE, BE, CE, PP, WRSR, PSID, LSID, WBPR, LBPR,
-                     ULBPR, NVWLDR, QPP, WRSR]
+                     ULBPR, NVWLDR, QPP]
 
 
 
@@ -88,17 +90,27 @@ def namedtupleX(typename, field_names, default_values=()):
         prototype = T(*default_values)
     T.__new__.__defaults__ = tuple(prototype)
     return T
+  
 
 '''
 named tuples supporting command session management
 '''
-cmdPhx=coll.namedtuple("cmdPhx", "mode length")
+# future dev begin
+# busyPhx is a "wait until not Busy" gate on a transaction
+# coding at this level will be much faster than sending
+# discrete, repeated busy status requests
+busyPhx=coll.namedtuple("busyPhx", "mode busy_bit")
+# wrenPhx is a "send write enable" phase, more elegant than present coding
+wrenPhx=coll.namedtuple("wrenPhx", "mode")
+# future dev done
+
+cmdPhx=coll.namedtuple("cmdPhx", "mode")
 addrPhx=coll.namedtuple("addrPhx", "mode length")
 modePhx=coll.namedtuple("modePhx", "mode length")
 dummyPhx=coll.namedtuple("dummyPhx", "mode length")
 dataPhx=coll.namedtuple("dataPhx", "mode lengthSpec")
 
-SpiCmdSpec=namedtupleX("SpiCmdSpec", "iowMax cmd mode address dummy data", [None, None, None, None, None, None])
+SpiCmdSpec=namedtupleX("SpiCmdSpec", "iowMax busy_wait send_wren cmd mode address dummy data", [None, None, None, None, None, None, None, None])
 
 
 LengthSpec=namedtupleX("LengthSpec", "fixed burstMode rangeMin rangeMax", [None, False, None, None])
@@ -120,12 +132,35 @@ SPIIO_DUAL = pmact.PS_SPI_IO_DUAL
 SPIIO_QUAD = pmact.PS_SPI_IO_QUAD
 SPIIO_DUMMY= 1+max([SPIIO_SINGLE, SPIIO_DUAL, SPIIO_QUAD])
 
+
+'''
+BusyWait Phase Specs
+'''
+w1BusyWait=busyPhx(mode=SPIIO_SINGLE, busy_bit=0b00000001)
+w2BusyWait=busyPhx(mode=SPIIO_DUAL, busy_bit=0b00000001)
+w4BusyWait=busyPhx(mode=SPIIO_QUAD, busy_bit=0b00000001)
+
+
+
+'''
+Wren Phase Specs
+'''
+
+w1WrenPhase=wrenPhx(mode=SPIIO_SINGLE)
+w2WrenPhase=wrenPhx(mode=SPIIO_DUAL)
+w4WrenPhase=wrenPhx(mode=SPIIO_QUAD)
+
+OPTIONAL_PHASES = [ [SPIIO_SINGLE, w1BusyWait, w1WrenPhase],
+                    [SPIIO_DUAL, w2BusyWait, w2WrenPhase],
+                    [SPIIO_QUAD, w4BusyWait, w4WrenPhase]]
+
+
 '''
 Cmd Phase Specs
 '''
-w1CmdPhase=cmdPhx(mode=SPIIO_SINGLE, length=1)
-w2CmdPhase=cmdPhx(mode=SPIIO_DUAL, length=1)
-w4CmdPhase=cmdPhx(mode=SPIIO_QUAD, length=1)
+w1CmdPhase=cmdPhx(mode=SPIIO_SINGLE)
+w2CmdPhase=cmdPhx(mode=SPIIO_DUAL)
+w4CmdPhase=cmdPhx(mode=SPIIO_QUAD)
 
 '''
 Address Phase Specs
@@ -351,12 +386,26 @@ class spiTransaction:
   m_dummy_mode    = None
   m_prev_spi_phase= None
   m_testutil      = None
-      
+  m_send_wren     = None
+  m_busy_wait     = None
+  m_busyPhx       = None
+  m_wrenPhx       = None
+        
   def __init__(self, spi_cmd, spi_cmd_descriptor):
     # ->SpiCmdSpec
     self.m_spi_read_not_write=spi_cmd[2]
     self.m_descriptor=spi_cmd_descriptor
     self.m_testutil=testutil.testUtil()
+    '''
+    not implementing fast busywait yet
+    '''
+    self.m_busy_wait=False
+    '''
+    implmenting send wren as an add on
+    phase of a command.
+    '''
+    if spi_cmd[0] in WREN_REQUIRED:
+      self.m_send_wren=True
     return
   
   def readNotWrite(self):
@@ -371,7 +420,27 @@ class spiTransaction:
       
       if phase!=None:
         self.m_spi_phases.append(phase)      
-  
+
+
+    '''
+    PREPEND optional phases
+    send_wren, WRITE ENABLE commands that write
+    busy_swait, WAIT FOR BUSY CLEAR for commands that write
+    '''
+
+    if self.m_send_wren or self.m_busy_wait:
+      options_mode=self.m_descriptor.cmd.mode
+      for option in OPTIONAL_PHASES:
+        if option[0]==options_mode:
+          if self.m_busy_wait:
+            self.m_busyPhx=option[1]
+            self.m_spi_phases.insert(0, self.m_busyPhx)
+
+          if self.m_send_wren:
+            self.m_wrenPhx=option[2]
+            self.m_spi_phases.insert(0, self.m_wrenPhx)
+          break
+
     if len(self.m_spi_phases)==0:
       self.m_testutil.fatalError("null command phase specification")
       
@@ -413,6 +482,12 @@ class spiTransaction:
       elif self.m_spi_phase.mode == self.m_protocol.promiraTestApp.SPIIO_DUMMY:
         return self.m_dummy_mode == nextphase.mode
     return False    
+  
+  def isBusyPhase(self):
+    return self.m_spi_phase == self.m_busyPhx
+  
+  def isWrenPhase(self):
+    return self.m_spi_phase == self.m_wrenPhx
   
   def isCmdPhase(self):
     return self.m_spi_phase == self.m_descriptor.cmd

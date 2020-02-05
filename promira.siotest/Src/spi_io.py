@@ -7,6 +7,7 @@ import promactive_msg as pm_msg
 import array
 import test_utility as testutil
 import cmd_protocol as protocol
+
 #from spi_cfg_mgr import configMgr
 
 
@@ -286,8 +287,44 @@ class spiIO:
     tuplet:  ( Success(T/F), data transfer length/None, data transfer array/None)
   '''
  
+  m_start_busytest_queue=None
+  m_continue_busytest_queue=None
+  
+  def buildBusyTestQueues(self, read_status_cmd):
+    
+      read_status=pm.array_u08(1)
+      read_status[1]=read_status_cmd
+      
+      '''
+      Start Busy Test
+        this instruction queue request the status register
+      '''
+      start_busytest_queue = pmact.ps_queue_create(self.m_app_conn_handle,
+                                          pmact.PS_MODULE_ID_SPI_ACTIVE)
+      pmact.ps_queue_clear(start_busytest_queue)
+      pmact.ps_queue_spi_oe(start_busytest_queue, 1)
+      pmact.ps_queue_spi_write(start_busytest_queue, protocol.SPIIO_SINGLE, 8, 1,  )
+      pmact.ps_queue_spi_write_word(start_busytest_queue, protocol.SPIIO_SINGLE, 8, 1 )
+      
+      '''
+      continue_busytest_queue
+        this instruction queue re-reads the status register
+        it MUST be committed AFTER a start_busytest_queue queue
+      '''
+      cont_busytest_queue = pmact.ps_queue_create(self.m_app_conn_handle,
+                                          pmact.PS_MODULE_ID_SPI_ACTIVE)
+      pmact.ps_queue_clear(cont_busytest_queue)
+      pmact.ps_queue_spi_oe(cont_busytest_queue, 1)
+      pmact.ps_queue_spi_write(cont_busytest_queue, protocol.SPIIO_SINGLE, 8, 1, read_status )
+      
+ 
   SpiResult=coll.namedtuple('SpiResult', 'success xfer_length xfer_array')
   
+  def getBusyTestQueues(self, read_status_cmd):
+    if self.m_start_busytest_queue==None or self.m_continue_busytest_queue==None:
+      self.buildBusyTestQueues(read_status_cmd)
+
+
   def spiMasterMultimodeCmd(self,
                                 spi_cmd,
                                 address=None,
@@ -303,19 +340,16 @@ class spiIO:
     cmd_spec=protocol.precedentCmdSpec(spi_cmd)
     spi_session=protocol.spiTransaction(spi_cmd, cmd_spec)
     collect = None
+    toggle_select_after_wren=False
     
-    '''
-    if cmd_byte in self.NODATA_CMDS:
-      dataphase_readNotWrite=None
-    else:
-      dataphase_readNotWrite=cmd_byte in self.READ_DATA_CMDS
-    '''
     
     #****DEBUG****
     if self.debug_devCollect:
       print("cmd_byte= ", hex(cmd_byte))
     #****DEBUG****
-    
+    '''
+    Initialize the session queue for all phases of this SPI Command.
+    '''
     session_queue = pmact.ps_queue_create(self.m_app_conn_handle,
                                           pmact.PS_MODULE_ID_SPI_ACTIVE)
     pmact.ps_queue_clear(session_queue)
@@ -333,14 +367,57 @@ class spiIO:
     of the enqueued writes
     '''
     
-    if cmd_byte in protocol.WREN_REQUIRED:
-      wren_cmd=array.ArrayType('B', [protocol.WREN])
-      pmact.ps_queue_spi_write(session_queue, protocol.SPIIO_SINGLE, 8, 1, wren_cmd )
-      pmact.ps_queue_spi_ss(session_queue, 0)
-      pmact.ps_queue_spi_ss(session_queue, self.m_ss_mask)
+    
+    spi_session.setInitialPhase()
+    
+    
+    '''
+    process fast busy_wait if intrinsic
+      instructions for initial status read and follow-on reads
+      are in built-once and cached queues
+    '''
+    
+    if spi_session.isBusyPhase():
+      slave_busy=True
+      read_status = array.array('B', [protocol.RDSR])
+      first_pass=True
+      
+      start_queue, continue_queue=self.getBusyTestQueues(read_status)
+      
+      while slave_busy:
+        if first_pass:
+          status_collect, _dc = pmact.ps_queue_submit(start_queue, self.m_channel_handle, 0)
+          collect_length, collect_buf = self.devCollect(status_collect)
+        else:
+          status_collect, _dc = pmact.ps_queue_submit(continue_queue, self.m_channel_handle, 0)
+          collect_length, collect_buf = self.devCollect(status_collect)
+          
+        status=collect_buf[0]
+        slave_busy = (status & 1 == 1)
+      
+      spi_session.nextSpiPhase()  
+    
+    '''
+    process write enable command if intrinsic
+      instructions are emitted into the general session queue
+    '''
+    
+    if spi_session.isWrenPhase()==True:
+      data_out = array.array('B', [protocol.WREN])
+      pmact.ps_queue_spi_write(session_queue, protocol.SPIIO_SINGLE, 8, 1, data_out )
 
+      
+      if toggle_select_after_wren:
+        '''
+        optionally toggle chip select after wren
+        spend some clock cycles to permit the slave to process WREN cmd
+        before continuing with re-select
+        '''
+        pmact.ps_queue_spi_ss(session_queue, 0)
+        pmact.ps_queue_spi_delay_cycles(session_queue, 8)
+        pmact.ps_queue_spi_ss(session_queue, self.m_ss_mask)
 
-
+      spi_session.nextSpiPhase()
 
 
         
@@ -348,7 +425,6 @@ class spiIO:
     '''
     cmd_phase
     ''' 
-    spi_session.setInitialPhase()
     if spi_session.isCmdPhase()==True:
       data_out = array.array('B', [cmd_byte])
       
@@ -419,23 +495,15 @@ class spiIO:
     dummy phase
     '''
     if spi_session.isDummyPhase()==True:
-      use_dummy_array=False
+
       phase=spi_session.currentSpiPhase()
       prev_phase=spi_session.prevSpiPhase()
       
-      if use_dummy_array:
-        dummy_array=pmact.array_u08(phase.length)
-        pmact.ps_queue_spi_write( session_queue,
-                                  prev_phase.mode,
-                                  8,
-                                  phase.length,
-                                  dummy_array)
-      else:
-        pmact.ps_queue_spi_write_word( session_queue,
-                                       prev_phase.mode,
-                                       8,
-                                       phase.length,
-                                       0)
+      pmact.ps_queue_spi_write_word( session_queue,
+                                     prev_phase.mode,
+                                     8,
+                                     phase.length,
+                                     0)
       spi_session.nextSpiPhase()
 
 

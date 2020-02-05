@@ -70,6 +70,7 @@ import time
 
 
 
+
 #==========================================================================
 # CONSTANTS
 #==========================================================================
@@ -208,13 +209,14 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     
     verbose=True
-    write_data = False
+    write_data = True
     read_single_data=True
-    read_dual_data=True
-    read_hispeed_data=True
+    read_dual_data=False
+    read_hispeed_data=False
     eeprom_unlocked=False
 
     first_loop=True
+    subtest_loops=10
     spi_parameters = self.m_config_mgr.firstConfig()
     self.m_spiio.initSpiMaster(spi_parameters)
     
@@ -291,16 +293,16 @@ class promiraSpiTestApp(usertest.SwUserTest):
                      [read_dual_data, protocol.SDOREAD, "Dual Output Read"]]
       
       test_failed=False
-      maxloop=4
+      subtest_loops=4
       for command in read_commands:
       
-        for loop in range(maxloop):
+        for loop in range(subtest_loops):
           if command[0]==True:
             test_failed=not self.readTest(command[1], command[2], page_address, self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
             if test_failed:
-              print("subtest iteration #"+str(loop+1)+" of "+str(maxloop)+" failed")
+              print("subtest iteration #"+str(loop+1)+" of "+str(subtest_loops)+" failed")
               break
-            elif loop==(maxloop-1):
+            elif loop==(subtest_loops-1):
               print("success: subtest (0x%02x) %s" % (command[1], command[2]))
               
             time.sleep(.01)  #10 ms sleep
