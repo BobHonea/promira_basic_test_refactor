@@ -6,7 +6,7 @@ import promira_py as pm
 import promactive_msg as pm_msg
 import array
 import test_utility as testutil
-import cmd_protocol as protocol
+from spi_protocol import py as protocol
 
 #from spi_cfg_mgr import configMgr
 

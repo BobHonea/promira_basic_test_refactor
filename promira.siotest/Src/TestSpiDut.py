@@ -58,7 +58,7 @@ from __future__ import division, with_statement, print_function
 import usertest
 import promact_is_py as pmact
 from eeprom import eepromAPI
-import cmd_protocol as protocol
+from spi_protocol import py as protocol
 import spi_cfg_mgr as spicfg
 import test_utility as testutil
 import promactive_msg as pmmsg 
