@@ -4,7 +4,7 @@ import sys
 import promact_is_py as pmact
 
 import spi_io as spiio
-import cmd_protocol as protocol
+from spi_protocol import py as protocol
 import eeprom_devices
 
 class eepromAPI:
