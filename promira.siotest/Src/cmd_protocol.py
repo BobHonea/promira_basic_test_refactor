@@ -47,7 +47,12 @@ NVWLDR    =   0xE8
 ULBPR     =   0x98
 RSID      =   0x88
 PSID      =   0xA5
+'''
+Microchip LSID conflicts with Micron RVCFG
+TODO: Fix This Conflict!!
+'''
 LSID      =   0x85
+
 '''
 Micron Instructions
 '''  
@@ -72,8 +77,8 @@ WRITE_DATA_CMDS =   [WRSR, SETBURST, PP, QPP, WBPR, NVWLDR, PSID]
 
 NODATA_CMDS     =   [NOP, RSTEN, RSTMEM, ENQIO, RSTQIO, WREN, WRDI, SE, BE, CE, ULBPR]
 
-WREN_REQUIRED   =   [ SE, BE, CE, PP, WRSR, PSID, LSID, WBPR, LBPR,
-                     ULBPR, NVWLDR, QPP]
+WREN_REQUIRED   =   [ SE, BE, CE, PP, WRSR, PSID, WBPR, LBPR,
+                     ULBPR, NVWLDR, QPP] #LSID, removed for convflict with RNVCFG
 
 
 
@@ -264,7 +269,7 @@ SPICMDTYPE_1B=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L2AddrP
 SPICMDTYPE_1C=SpiCmdSpec(iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, address=w2L3AddrPhase, data=w2Data_1plus)
 SPICMDTYPE_1D=SpiCmdSpec(iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, address=w1L3AddrPhase, dummy=x8DummyPhase, data=w2Data_1plus)
 SPICMDTYPE_1E=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, mode=w1ModePhase,      dummy=x1DummyPhase, data=w4Data_2)
-
+SPICMDTYPE_1F=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, data=w1Data_2plus)
 
 
 
@@ -296,6 +301,7 @@ PHASE_SPECS_17 = [SPICMDTYPE_1C] # SDIOREAD
 PHASE_SPECS_18 = [SPICMDTYPE_1D] # SDOREADX
 PHASE_SPECS_19 = [SPICMDTYPE_1E]
 PHASE_SPECS_1A = [SPICMDTYPE_10]
+PHASE_SPECS_1B = [SPICMDTYPE_1F]
 
 
 
@@ -337,9 +343,9 @@ SPICMD_NVWLDR     = [NVWLDR,    0x13,         IOTYPE_WRITE]
 SPICMD_ULBPR      = [ULBPR,     0,            IOTYPE_NONE]
 SPICMD_RSID       = [RSID,      [0x14, 0x15], IOTYPE_READ]
 SPICMD_PSID       = [PSID,      0x16,         IOTYPE_WRITE]
-SPICMD_LSID       = [LSID,      0,            IOTYPE_NONE]
+#SPICMD_LSID       = [LSID,      0,            IOTYPE_NONE]
 SPICMD_RFLAG      = [RFLAG,     2,            IOTYPE_READ]
-SPICMD_RNVCFG     = [RNVCFG,    2,            IOTYPE_READ]
+SPICMD_RNVCFG     = [RNVCFG,    0x1B,         IOTYPE_READ]
 SPICMD_RVCFG      = [RVCFG,     2,            IOTYPE_READ]
 SPICMD_RENHVCFG   = [RENHVCFG,  2,            IOTYPE_READ]
 
@@ -362,7 +368,9 @@ SPI_CMDSPECS = [ SPICMD_NOP, SPICMD_RSTEN, SPICMD_RSTMEM,
                  SPICMD_CE, SPICMD_PP, SPICMD_QPP, SPICMD_WRSU,
                  SPICMD_WRRE, SPICMD_RBPR, SPICMD_WBPR, SPICMD_LBPR,
                  SPICMD_NVWLDR, SPICMD_ULBPR, SPICMD_RSID,
-                 SPICMD_PSID, SPICMD_LSID, SPICMD_SDOREADX ] 
+                 SPICMD_PSID,
+                 #SPICMD_LSID,  conflicts with R
+                 SPICMD_SDOREADX, SPICMD_RNVCFG, SPICMD_RVCFG, SPICMD_RFLAG, SPICMD_RENHVCFG ] 
 
 
 PHASE_SPECS = [ PHASE_SPECS_0, PHASE_SPECS_1, PHASE_SPECS_2, PHASE_SPECS_3, PHASE_SPECS_4,
@@ -370,7 +378,7 @@ PHASE_SPECS = [ PHASE_SPECS_0, PHASE_SPECS_1, PHASE_SPECS_2, PHASE_SPECS_3, PHAS
               PHASE_SPECS_A, PHASE_SPECS_B, PHASE_SPECS_C, PHASE_SPECS_D, PHASE_SPECS_E,
               PHASE_SPECS_F, PHASE_SPECS_10, PHASE_SPECS_11, PHASE_SPECS_12,
               PHASE_SPECS_13, PHASE_SPECS_14, PHASE_SPECS_15, PHASE_SPECS_16, PHASE_SPECS_17,
-              PHASE_SPECS_18, PHASE_SPECS_19, PHASE_SPECS_1A]
+              PHASE_SPECS_18, PHASE_SPECS_19, PHASE_SPECS_1A, PHASE_SPECS_1B]
 
 
   

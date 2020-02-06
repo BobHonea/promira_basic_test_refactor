@@ -340,7 +340,7 @@ class spiIO:
     cmd_spec=protocol.precedentCmdSpec(spi_cmd)
     spi_session=protocol.spiTransaction(spi_cmd, cmd_spec)
     collect = None
-    toggle_select_after_wren=False
+    toggle_select_after_wren=True
     
     
     #****DEBUG****
@@ -414,7 +414,7 @@ class spiIO:
         before continuing with re-select
         '''
         pmact.ps_queue_spi_ss(session_queue, 0)
-        pmact.ps_queue_spi_delay_cycles(session_queue, 8)
+        #pmact.ps_queue_spi_delay_ns(session_queue, 1)
         pmact.ps_queue_spi_ss(session_queue, self.m_ss_mask)
 
       spi_session.nextSpiPhase()

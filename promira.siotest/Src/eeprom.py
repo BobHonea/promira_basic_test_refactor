@@ -191,21 +191,25 @@ class eepromAPI:
     
   
   def dtrStatus(self):
-    return self.nvConfigStatus(0b00100000, 5)
+    return not self.nvConfigStatus(0b100000, 5)
   
   def dualStatus(self):
-    return self.nvConfigStatus(0b10, 1)
+    return not self.nvConfigStatus(0b10, 1)
   
   def quadStatus(self):
-    return self.nvConfigStatus(0b1, 0)
+    return not self.nvConfigStatus(0b1, 0)
   
   def readMicronStatusRegisters(self):
+    if self.m_devconfig.mfgr!='Micron':
+      self.m_testutil.fatalError("Micron Tech. Devices Only")
+      
     status_val=array.ArrayType('B', [0])
+    status_val2=array.ArrayType('B', [0, 0])
     _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RFLAG, None, 1, status_val)
     flagstatus=status_val[0]
     
-    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RNVCFG, None, 1, status_val)
-    nvconfig= status_val[0]
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RNVCFG, None, 2, status_val2)
+    nvconfig=  status_val2[0] + (int(status_val2[1])>>8)
     
     _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RVCFG, None, 1, status_val)
     vconfig=status_val[0]
@@ -350,8 +354,24 @@ class eepromAPI:
       
     self.m_testutil.fatalError("protect bitmap write failure")
   
-  
+
   def unlockDevice(self):
+    if self.m_devconfig.mfgr=='Micron':
+      return self.unlockMicronDevice()
+    
+    if self.m_devconfig.mfgr=='Microchip':
+      return self.unlockMicrochipDevice()
+    
+    self.m_testutil.fatalError('unrecognized device')
+  
+  def unlockMicronDevice(self):
+
+    if self.globalUnlock() == False:
+      self.m_testutil.fatalError("Global Unlock Command Failed")
+      
+    return True
+
+  def unlockMicrochipDevice(self):
 
     debug=False
   

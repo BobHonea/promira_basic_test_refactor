@@ -63,6 +63,7 @@ import spi_cfg_mgr as spicfg
 import test_utility as testutil
 import promactive_msg as pmmsg 
 import time
+from cmd_protocol import RVCFG
 
 
 
@@ -209,10 +210,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     
     verbose=True
-    write_data = True
+    write_data = False
     read_single_data=True
-    read_dual_data=False
-    read_hispeed_data=False
+    read_dual_data=True
+    read_hispeed_data=True
     eeprom_unlocked=False
 
     first_loop=True
@@ -247,16 +248,15 @@ class promiraSpiTestApp(usertest.SwUserTest):
     print("EEPROM Type: "+ mfgrname + " "+ chipname  )
     print("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V")
 
-#      if mfgrname=='Micron':
-    micronstatus=self.m_eepromAPI.readMicronStatusRegisters()
-    print(repr(micronstatus))
+    if mfgrname=='Micron':
+      micronstatus=self.m_eepromAPI.readMicronStatusRegisters()
+      print(repr(micronstatus))
+      
+      dtr_status=not self.m_eepromAPI.dtrStatus()
+      dual_status=not self.m_eepromAPI.dualStatus()
+      quad_status=not self.m_eepromAPI.quadStatus()
     
-    dtr_status=not self.m_eepromAPI.dtrStatus()
-    dual_status=not self.m_eepromAPI.dualStatus()
-    quad_status=not self.m_eepromAPI.quadStatus()
-    
-    print("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
-    
+      print("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
     
     page_address=spi_parameters.address_base+0x1000
     
