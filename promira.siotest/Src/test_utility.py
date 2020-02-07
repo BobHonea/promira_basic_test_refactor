@@ -1,19 +1,21 @@
 import random
 import sys
 import promact_is_py as pmact
-
+from spi_io import spiIO
 import array
 import math
 from _random import Random
 
+
 class testUtil:
   m_instantiated=False
   m_random=Random()
-  m_randarray_count = 16  # arbitrary number
-  m_random_page_array_index = 0
-  m_random_page_array_list = []
+  m_ref_array_count = 16  # arbitrary number
+  m_ref_array_index = 0
+  m_ref_array_list = []
+  m_patterned_not_random_arrays = True
   m_page_size=256  # eeprom page size (universal)
-
+  m_trace_buffer=[]
   _instance=None
   
   def __new__(cls):
@@ -21,19 +23,59 @@ class testUtil:
           print('Creating the testUtil object')
           cls._instance = super(testUtil, cls).__new__(cls)
           cls.m_random=random.Random()
-          cls.m_random.seed(1)
+          cls.m_random.seed(2000)
           cls.buildPageArrays(cls)
       return cls._instance
   
-  def __singleton_init__(self, page_size=256):
-    self.m_random.seed(0)
-    self.m_page_size=page_size
-    self.buildRandomPageArrays()
   
   def fatalError(self, reason):
-    print("Fatal : "+reason)
-    sys.exit()
+    
+    fatal_msg="Fatal : "+reason
+    if self.traceEnabled():
+      self.bufferTraceInfo(fatal_msg)
+      self.dumpTraceBuffer()
+    else:
+      print(fatal_msg)
+    sys.exit(-1)
 
+  def traceEnabled(self):
+    return self.m_trace_enabled
+  
+  def setTraceBufferDepth(self, trace_depth):
+    self.m_trace_depth=trace_depth
+    
+    
+  def initTraceBuffer(self, trace_depth=0):
+    self.m_trace_buffer=[]
+    self.m_trace_enabled=True
+    self.m_trace_depth=trace_depth
+
+    
+  def disableTrace(self):
+    self.m_trace_enabled=False
+
+  def bufferTraceInfo(self, string_info):
+    if self.m_trace_enabled:
+      if self.m_trace_depth>0:
+        if len(self.m_trace_buffer) >= self.m_trace_depth:
+          self.m_trace_buffer.pop(0)
+          
+      self.m_trace_buffer.append(string_info)
+
+  def flushTraceBuffer(self):
+    self.m_trace_buffer = []
+
+  def dumpTraceBuffer(self):
+    if self.m_trace_enabled:
+      if len(self.m_trace_buffer) > 0:
+        print("******TRACE BUFFER DUMP ******")
+        index=0
+        for entry in self.m_trace_buffer:
+          print("%04d %s" % (index,entry))
+          index+=1
+        return True
+    return False
+    
   def ipString(self, ip_integer):
     integer=ip_integer
     ipString_buf=""
@@ -47,7 +89,7 @@ class testUtil:
       ipString_buf=octet_string+ipString_buf
     return ipString_buf
 
-    
+  
   def zeroedArray(self, array_size):
       zero_array = pmact.array_u08(array_size)
       return zero_array
@@ -96,27 +138,26 @@ class testUtil:
         
       return rand_array
   
-  PATTERNED_ARRAYS=True
   
   def buildPageArrays(self):
-      self.m_random_page_array_list = []
-      for _index in range(self.m_randarray_count):
-        if self.PATTERNED_ARRAYS:
+      self.m_ref_array_list = []
+      for _index in range(self.m_ref_array_count):
+        if self.m_patterned_not_random_arrays:
           this_array=self.generatePatternedArray(self.m_page_size, self.m_page_size)
         else:  
           this_array=self.generateRandomArray(self.m_page_size, self.m_page_size)
              
-        self.m_random_page_array_list.append(this_array)
-        # array_label = "Random Page Array #%02X:" % index
-        # self.printArrayHexDump(array_label, self.m_random_page_array_list[index])
+        self.m_ref_array_list.append(this_array)
+        # array_label = "Reference Page Array #%02X:" % index
+        # self.printArrayHexDump(array_label, self.m_ref_array_list[index])
           
-  def firstRandomPageArray(self):
-    self.m_random_page_array_index=0
-    return self.m_random_page_array_list[0]
+  def firstReferencePageArray(self):
+    self.m_ref_array_index=0
+    return self.m_ref_array_list[0]
     
-  def nextRandomPageArray(self):
-      self.m_random_page_array_index = (self.m_random_page_array_index + 1) % self.m_randarray_count
-      return self.m_random_page_array_list[self.m_random_page_array_index]
+  def nextReferencePageArray(self):
+      self.m_ref_array_index = (self.m_ref_array_index + 1) % self.m_ref_array_count
+      return self.m_ref_array_list[self.m_ref_array_index]
 
 
   def printArrayHexDump(self, label, data_array=None):

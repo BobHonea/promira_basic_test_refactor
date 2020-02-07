@@ -1,8 +1,10 @@
 import promact_is_py as pmact
 import collections 
 import sys
-  
+
 class promactMessages:
+  
+
       
   PROMACT_ERRORS=[  (pmact.PS_APP_OK, "ok" ), 
     (pmact.PS_APP_UNABLE_TO_LOAD_LIBRARY, "unable to load library" ),
@@ -114,19 +116,18 @@ class promactMessages:
       if item[0]==result_code:
         return item[1]
 
-  
+  def getResponseMessage(self, response):
+    for colresp in self.COLLECT_RESPONSE_MSG:
+      if colresp.code==response:
+        return True, colresp.message
+    return False, "collect response message not found"
+
   def showCollectResponseMsg(self, response):
     if response not in self.COLLECT_RESPONSES:
       self.fatalError("unknown collect response")
 
-    def getResponseMessage(response):
-      for colresp in self.COLLECT_RESPONSE_MSG:
-        if colresp.code==response:
-          return colresp.message
-      
-      self.fatalError("collect response message not found")
  
-    message=getResponseMessage(response)
+    found, message=self.getResponseMessage(response)
     print("Collect Response: "+message)
     
   pass

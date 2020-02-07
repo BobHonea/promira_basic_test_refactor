@@ -1,7 +1,7 @@
 from __future__ import division, with_statement, print_function
 import promact_is_py as pmact
 import collections as coll
-from test_utility import testUtil
+
 import test_utility as testutil
 
 

@@ -107,7 +107,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_config_mgr   = spicfg.configMgr()
     self.m_spi_msg      = pmmsg.promactMessages()
     self.m_eepromAPI    = eepromAPI()
-    self.m_spiio       = self.m_eepromAPI.getobjectSpiIO()
+    self.m_spiio        = self.m_eepromAPI.getobjectSpiIO()
 
     self.m_pagesize     = eepromAPI.EEPROM_PAGE_SIZE
 
@@ -201,7 +201,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
   def runTest(self):
 
 
-    txdata_array = self.m_testutil.firstRandomPageArray()
+    txdata_array = self.m_testutil.firstReferencePageArray()
     _txdata_count = len(txdata_array)
     
 
@@ -221,6 +221,13 @@ class promiraSpiTestApp(usertest.SwUserTest):
     spi_parameters = self.m_config_mgr.firstConfig()
     self.m_spiio.initSpiMaster(spi_parameters)
     
+    
+
+    self.m_testutil.initTraceBuffer(200)
+    
+    #self.m_spiio.signalEvent()
+    #self.m_testutil.fatalError("just because")
+          
     '''
     if the test configuration specifies an eeprom configuration,
     set the eeprom configuration to the eeprom api.
@@ -241,6 +248,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
     self.m_eepromAPI.testJedec()
     eepromConfig= self.m_eepromAPI.m_devconfig
+    if self.m_testutil.traceEnabled():
+      self.m_testutil.bufferTraceInfo(repr(eepromConfig))
     
     mfgrname=eepromConfig.mfgr
     chipname=eepromConfig.chip_type
@@ -261,8 +270,14 @@ class promiraSpiTestApp(usertest.SwUserTest):
     page_address=spi_parameters.address_base+0x1000
     
     for spi_parameters in self.m_config_mgr.m_spi_config_list:
+      if self.m_testutil.traceEnabled():
+        self.m_testutil.flushTraceBuffer()
+        self.m_testutil.bufferTraceInfo(repr(spi_parameters))
+        
       print(repr(spi_parameters))
       self.m_spiio.initSpiMaster(spi_parameters)
+
+
 
             
       '''
@@ -314,4 +329,6 @@ class promiraSpiTestApp(usertest.SwUserTest):
         break
 
       first_loop=False
+      
+
     print("Configuration Looptest Complete!")

@@ -5,8 +5,10 @@ import promact_is_py as pmact
 import promira_py as pm
 import promactive_msg as pm_msg
 import array
-import test_utility as testutil
+
 import cmd_protocol as protocol
+import test_utility as testutil
+from distutils.log import fatal
 
 #from spi_cfg_mgr import configMgr
 
@@ -40,24 +42,30 @@ class spiIO:
   m_app_name        = "com.totalphase.promact_is"
   m_promira_open    = None
   m_device_ipstring = None
+  _instance         = None
   
-  def __init__(self):
-    self.m_pm_msg   = pm_msg.promactMessages()
-    self.m_testutil= testutil.testUtil()    
-    #self.m_configMgr  = configMgr()
+  
+  def __new__(cls):
+    if cls._instance is None:
+        print('Creating the SpiIO object')
+        cls._instance = super(spiIO, cls).__new__(cls)        
+        cls.m_pm_msg   = pm_msg.promactMessages()
+        cls.m_testutil= testutil.testUtil()    
+        #self.m_configMgr  = configMgr()
+        
+        cls.m_ss_mask = 0x1
+        cls.m_device = None
+        cls.m_devices    = pmact.array_u16(4)
+        cls.m_device_ids = pmact.array_u32(4)
+        cls.m_device_ips = pmact.array_u32(4)
+        cls.m_device_status = pmact.array_u32(4)
     
-    self.m_ss_mask = 0x1
-    self.m_device = None
-    self.m_devices    = pmact.array_u16(4)
-    self.m_device_ids = pmact.array_u32(4)
-    self.m_device_ips = pmact.array_u32(4)
-    self.m_device_status = pmact.array_u32(4)
-
-    self.m_spi_configuration = None #self.m_configMgr.firstConfig()
-    self.m_timeout_ms = 1000  # arbitrary 10 second value 
-
-    self.discoverDevice()
-    self.m_spi_initialized = False
+        cls.m_spi_configuration = None #cls.m_configMgr.firstConfig()
+        cls.m_timeout_ms = 1000  # arbitrary 10 second value 
+    
+        cls.discoverDevice(cls)
+        cls.m_spi_initialized = False
+        return cls._instance
     
 
   
@@ -97,7 +105,44 @@ class spiIO:
   def getAdapterIP(self):
     return self.m_device_ipString
   
+  '''
+  signalEvent() 
+  .............causes a unique event to occur on the SPI Bus
+  this event is one that WILL NOT occur during normal operation
+  this event can be interpreted by test equipment as a synchronization
+  point to perform a test or display operation (dump trace, etc).
+  '''
+ 
+  m_in_signal_event=False
   
+  def signalEvent(self):
+    if self.m_in_signal_event:
+      return
+    
+    #signal_ss_polarity  = (self.m_spi_ss_polarity) &0xf    
+    data_out=pmact.array_u08(1)
+    data_out[0]=0xAA
+    #invert chip select polarity, send a byte
+    retval=pmact.ps_spi_configure( self.m_channel_handle,
+                                   self.m_spi_clk_mode, 
+                                   self.m_spi_bit_order, 
+                                   self.m_spi_ss_polarity)
+
+    signal_queue = pmact.ps_queue_create( self.m_app_conn_handle,
+                                                  pmact.PS_MODULE_ID_SPI_ACTIVE)
+    pmact.ps_queue_clear(signal_queue)
+    pmact.ps_queue_spi_oe(signal_queue, 0x01)
+    pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 10, 0xAA)
+    pmact.ps_queue_spi_oe(signal_queue, 0x00)
+
+        
+    status_collect, _dc = pmact.ps_queue_submit(signal_queue, self.m_channel_handle, 0)
+    self.m_in_signal_event=True
+    collect_length, collect_buf = self.procDevCollect(status_collect)
+    self.m_in_signal_event=False
+    
+
+          
   def initSpiMaster(self, parameters):
     # (configVal.spiConfiguration)
     self.m_spi_parameters   = parameters
@@ -234,11 +279,15 @@ class spiIO:
     self.devClose()
 
 
-  debug_devCollect = False
+  debug_devCollect = True
   def devCollect (self, collect):
 
     response_length=0
-
+    fatal_error=False
+    fatal_count=0
+    max_fatal_responses=3
+    errmsg=None
+    
     '''
     collect intermediate results until:
       No More Cmds Uncollected
@@ -251,31 +300,71 @@ class spiIO:
       
     '''
     while True:
-        t, _length, result = pmact.ps_collect_resp(collect, -1)
+        t, _length, result = pmact.ps_collect_resp(collect, 100)
         #****DEBUG****
         if self.debug_devCollect:
-          self.m_pm_msg.showCollectResponseMsg(t)
+          found, resp_msg=self.m_pm_msg.getResponseMessage(t)
+          resp_msg="in devCollect(): %s" % resp_msg
+
+          if not found:
+            fatal_error=True
+            fatal_count+=1
+            errmsg=resp_msg
+                                
+          if self.m_testutil.traceEnabled():
+            self.m_testutil.bufferTraceInfo(resp_msg)
+          else:
+            print(resp_msg)
+            
+        if fatal_count > max_fatal_responses:
+          self.m_testutil.fatalError("DevCollect Spinning: %s" % errmsg)
+
         #****DEBUG****  
         if t == pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT:
+          if fatal_error==False:
             break
+
+          '''
+          fatal devCollect error processing
+          '''
+          if self.m_testutil.traceEnabled():
+            self.m_testutil.bufferTraceInfo("in devCollect(): %s" % errmsg)
+          else:
+            self.m_testutil.fatalError("devCollect: Promira Reported Error \ndevCollect: %s" % errmsg)
+
         elif t < 0:
-            print(pmact.ps_app_status_string(t))
-            self.m_testutil.fatalError("devCollect: Promira Reported Error")
+            errmsg=pmact.ps_app_status_string(t)
+            fatal_error=True
+            fatal_count+=1
+            print(errmsg)
+
           
         if t == pmact.PS_SPI_CMD_READ:
             _ret, _word_size, buf = pmact.ps_collect_spi_read(collect, result)
-            #****DEBUG****
             if self.debug_devCollect:
-              print("PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf)))
-            #****DEBUG****
+              input_msg="PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf))
+              if self.m_testutil.traceEnabled():
+                self.m_testutil.bufferTraceInfo(input_msg)
+              else:
+                print(input_msg)
+
             response_length+= len(buf)
             #response_buf += buf
     
 #    return response_length, response_buf
     if buf==None:
-      return _ret, buf
+      return _ret, buf, fatal_error
 
 
+    return _ret, buf, fatal_error
+  
+  def procDevCollect(self, collect):
+    _ret, buf, fatal_error = self.devCollect(collect)
+    
+    if fatal_error:
+      self.signalEvent()
+      self.m_testutil.fatalError("Error In DevCollect")
+      
     return _ret, buf
   
 
@@ -302,9 +391,9 @@ class spiIO:
       start_busytest_queue = pmact.ps_queue_create(self.m_app_conn_handle,
                                           pmact.PS_MODULE_ID_SPI_ACTIVE)
       pmact.ps_queue_clear(start_busytest_queue)
-      pmact.ps_queue_spi_oe(start_busytest_queue, 1)
-      pmact.ps_queue_spi_write(start_busytest_queue, protocol.SPIIO_SINGLE, 8, 1,  )
-      pmact.ps_queue_spi_write_word(start_busytest_queue, protocol.SPIIO_SINGLE, 8, 1 )
+      pmact.ps_queue_spi_oe(start_busytest_queue, self.m_ss_mask)
+      pmact.ps_queue_spi_write(start_busytest_queue, protocol.SPIIO_SINGLE, 8, 1, read_status )
+      pmact.ps_queue_spi_write_word(start_busytest_queue, protocol.SPIIO_SINGLE, 8, 1, 0)
       
       '''
       continue_busytest_queue
@@ -339,13 +428,19 @@ class spiIO:
     cmd_byte=spi_cmd[0]
     cmd_spec=protocol.precedentCmdSpec(spi_cmd)
     spi_session=protocol.spiTransaction(spi_cmd, cmd_spec)
+    spi_session.setInitialPhase()
     collect = None
     toggle_select_after_wren=True
     
     
     #****DEBUG****
     if self.debug_devCollect:
-      print("cmd_byte= ", hex(cmd_byte))
+      cmd_msg="cmd_byte= %02x" % cmd_byte
+      if self.m_testutil.traceEnabled():
+        self.m_testutil.bufferTraceInfo(cmd_msg)
+        self.m_testutil.bufferTraceInfo(repr(spi_session.m_spi_phases))
+      else:
+        print(cmd_msg)
     #****DEBUG****
     '''
     Initialize the session queue for all phases of this SPI Command.
@@ -368,7 +463,7 @@ class spiIO:
     '''
     
     
-    spi_session.setInitialPhase()
+
     
     
     '''
@@ -387,10 +482,10 @@ class spiIO:
       while slave_busy:
         if first_pass:
           status_collect, _dc = pmact.ps_queue_submit(start_queue, self.m_channel_handle, 0)
-          collect_length, collect_buf = self.devCollect(status_collect)
+          collect_length, collect_buf = self.procDevCollect(status_collect)
         else:
           status_collect, _dc = pmact.ps_queue_submit(continue_queue, self.m_channel_handle, 0)
-          collect_length, collect_buf = self.devCollect(status_collect)
+          collect_length, collect_buf = self.procDevCollect(status_collect)
           
         status=collect_buf[0]
         slave_busy = (status & 1 == 1)
@@ -451,7 +546,7 @@ class spiIO:
         if collect_handle==None:
           self.m_testutil.fatalError("NoneType collected")
           
-        result_length, _dc = self.devCollect(collect_handle)
+        result_length, _dc = self.procDevCollect(collect_handle)
         pmact.ps_queue_destroy(session_queue)
         return self.SpiResult(True, None, None)
       else:
@@ -485,7 +580,7 @@ class spiIO:
         pmact.ps_queue_spi_ss(session_queue, 0)
         pmact.ps_queue_spi_oe(session_queue, 0)        
         collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
-        collect_length, collect_buf = self.devCollect(collect)
+        collect_length, collect_buf = self.procDevCollect(collect)
         pmact.ps_queue_destroy(session_queue)
         return self.SpiResult(True, collect_length, _dc)
         
@@ -568,7 +663,7 @@ class spiIO:
         #pmact.ps_queue_delay_ms(session_queue, 1)
           
         collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
-        _in_length, _in_buf = self.devCollect(collect)
+        _in_length, _in_buf = self.procDevCollect(collect)
         pmact.ps_queue_destroy(session_queue)
         
         return self.SpiResult(True, data_length, data_buffer)
@@ -589,7 +684,7 @@ class spiIO:
         
 
           
-        collect_length, collect_buf = self.devCollect(collect)
+        collect_length, collect_buf = self.procDevCollect(collect)
         
         if not isinstance(collect_buf, coll.Iterable):
           self.m_testutil.fatalError("return buf not 'iterable'")
