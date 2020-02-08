@@ -129,28 +129,28 @@ class promiraSpiTestApp(usertest.SwUserTest):
   def voltageOK(self, var, fixed, eeprom_vdd):
 
     if fixed!=None:
-      print("Promira DUT voltage supply (VTGT1,2) is not allowed")
+      self.m_testutil.bufferDetailInfo("Promira DUT voltage supply (VTGT1,2) is not allowed")
       return True
 
     elif var==None:
-        print("Bench "+str(eeprom_vdd)+"V power supply required for eeprom")
+        self.m_testutil.bufferDetailInfo("Bench "+str(eeprom_vdd)+"V power supply required for eeprom")
         return True
       
     elif var==3.3:
       if eeprom_vdd==3.3:
-        print("EEPROM vdd="+str(var)+"V supplied by Promira")
+        self.m_testutil.bufferDetailInfo("EEPROM vdd="+str(var)+"V supplied by Promira")
         return True
       
       else:
-        print("EEPROM vdd="+str(eeprom_vdd)+"V, supply by Promira is "+str(var)+"V: MISMATCH")
+        self.m_testutil.bufferDetailInfo("EEPROM vdd="+str(eeprom_vdd)+"V, supply by Promira is "+str(var)+"V: MISMATCH")
         return False
 
     elif eeprom_vdd==1.8:
         if var>=1.6 and var<=1.8:
-          print("EEPROM vdd="+str(eeprom_vdd)+"V, supply by Promira is "+str(var)+"V: OK")
+          self.m_testutil.bufferDetailInfo("EEPROM vdd="+str(eeprom_vdd)+"V, supply by Promira is "+str(var)+"V: OK")
           return True
           
-    print("Promira Supply and EEPROM vdd mismatch")
+    self.m_testutil.bufferDisplayInfo("Promira Supply and EEPROM vdd mismatch")
     return False
   
   
@@ -189,9 +189,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
       
     if not self.m_testutil.arraysMatch(rxdata_array, pattern_array):
-        print("%s comparison fault" % cmd_namestring)
+        self.m_testutil.bufferDisplayInfo("%s comparison fault" % cmd_namestring)
         if verbose:
-          print("Sector Address %x" % address)
+          self.m_testutil.bufferDisplayInfo("Sector Address %x" % address)
 
           self.m_testutil.printArrayHexDumpWithErrors("EEProm %s" % cmd_namestring, rxdata_array, pattern_array)
           
@@ -224,6 +224,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
 
     self.m_testutil.initTraceBuffer(200)
+    self.m_testutil.detailTraceOff()
+    self.m_testutil.displayTraceOn()
     
     #self.m_spiio.signalEvent()
     #self.m_testutil.fatalError("just because")
@@ -249,86 +251,95 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_eepromAPI.testJedec()
     eepromConfig= self.m_eepromAPI.m_devconfig
     if self.m_testutil.traceEnabled():
-      self.m_testutil.bufferTraceInfo(repr(eepromConfig))
+      self.m_testutil.bufferTraceInfo(repr(eepromConfig), True)
     
     mfgrname=eepromConfig.mfgr
     chipname=eepromConfig.chip_type
     memsize_MB=eepromConfig.memsize/(1024*1024)
-    print("EEPROM Type: "+ mfgrname + " "+ chipname  )
-    print("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V")
+    self.m_testutil.bufferDisplayInfo("EEPROM Type: "+ mfgrname + " "+ chipname, True )
+    self.m_testutil.bufferDisplayInfo("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V", True)
 
     if mfgrname=='Micron':
       micronstatus=self.m_eepromAPI.readMicronStatusRegisters()
-      print(repr(micronstatus))
+      self.m_testutil.bufferTraceInfo(repr(micronstatus), True)
       
       dtr_status=not self.m_eepromAPI.dtrStatus()
       dual_status=not self.m_eepromAPI.dualStatus()
       quad_status=not self.m_eepromAPI.quadStatus()
     
-      print("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
+      self.m_testutil.bufferDisplayInfo("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
     
     page_address=spi_parameters.address_base+0x1000
     
-    for spi_parameters in self.m_config_mgr.m_spi_config_list:
-      if self.m_testutil.traceEnabled():
+    '''
+    lock printed data up to this point into Trace Buffer
+    it will never be flushed.
+    '''
+    self.m_testutil.protectTraceBuffer()
+    while True:
+      for spi_parameters in self.m_config_mgr.m_spi_config_list:
+        self.m_testutil.traceEchoOff()
         self.m_testutil.flushTraceBuffer()
-        self.m_testutil.bufferTraceInfo(repr(spi_parameters))
+        self.m_testutil.detailTraceOn()
+        self.m_testutil.displayTraceOn()   
+  
+        self.m_testutil.bufferDetailInfo(repr(spi_parameters))
         
-      print(repr(spi_parameters))
-      self.m_spiio.initSpiMaster(spi_parameters)
-
-
-
-            
-      '''
-      check to see that power is appropriate for the target
-      the variable voltage supplies the eeprom, which
-      can have a voltage range of 3.3v only, or 1.6 to 1.8V
-      '''
-      fixed=spi_parameters.tgt_v1_fixed
-      var=spi_parameters.tgt_v2_variable
-
-      if not self.voltageOK(var, fixed, eepromConfig.vdd):
-        print("CONFIGURATION SKIPPED/NOT TESTED")
-        continue
-      
-
-      if write_data and (not eeprom_unlocked):
-        eeprom_unlocked=self.m_eepromAPI.unlockDevice()
-        
-      if write_data:
-        self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, txdata_array)
-
-      if verbose and first_loop:
-        self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
-
-            
-      read_commands=[[read_hispeed_data, protocol.HSREAD, "High Speed Read"],
-                     [read_single_data, protocol.READ, "Read"],
-                     [read_dual_data, protocol.SDOREAD, "Dual Output Read"]]
-      
-      test_failed=False
-      subtest_loops=4
-      for command in read_commands:
-      
-        for loop in range(subtest_loops):
-          if command[0]==True:
-            test_failed=not self.readTest(command[1], command[2], page_address, self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
-            if test_failed:
-              print("subtest iteration #"+str(loop+1)+" of "+str(subtest_loops)+" failed")
-              break
-            elif loop==(subtest_loops-1):
-              print("success: subtest (0x%02x) %s" % (command[1], command[2]))
+        self.m_spiio.initSpiMaster(spi_parameters)
+  
+  
+  
               
-            time.sleep(.01)  #10 ms sleep
-
+        '''
+        check to see that power is appropriate for the target
+        the variable voltage supplies the eeprom, which
+        can have a voltage range of 3.3v only, or 1.6 to 1.8V
+        '''
+        fixed=spi_parameters.tgt_v1_fixed
+        var=spi_parameters.tgt_v2_variable
+  
+        if not self.voltageOK(var, fixed, eepromConfig.vdd):
+          self.m_testutil.bufferTraceInfo("CONFIGURATION SKIPPED/NOT TESTED", True)
+          continue
+        
+        self.m_testutil.traceEchoOff()
+  
+        if write_data and (not eeprom_unlocked):
+          eeprom_unlocked=self.m_eepromAPI.unlockDevice()
+          
+        if write_data:
+          self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, txdata_array)
+  
+        if verbose and first_loop:
+          self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
+  
+              
+        read_commands=[[read_hispeed_data, protocol.HSREAD, "High Speed Read"],
+                       [read_single_data, protocol.READ, "Read"],
+                       [read_dual_data, protocol.SDOREAD, "Dual Output Read"]]
+        
+        test_failed=False
+        subtest_loops=4
+        for command in read_commands:
+        
+          for loop in range(subtest_loops):
+            if command[0]==True:
+              test_failed=not self.readTest(command[1], command[2], page_address, self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
+              if test_failed:
+                self.m_testutil.bufferDetailInfo("subtest iteration #"+str(loop+1)+" of "+str(subtest_loops)+" failed")
+                break
+              elif loop==(subtest_loops-1):
+                self.m_testutil.bufferDetailInfo("success: subtest (0x%02x) %s" % (command[1], command[2]))
+                
+              time.sleep(.01)  #10 ms sleep
+  
+          if test_failed:
+            break                                                                                 
+  
         if test_failed:
-          break                                                                                 
-
-      if test_failed:
-        break
-
-      first_loop=False
-      
-
-    print("Configuration Looptest Complete!")
+          break
+  
+        first_loop=False
+        
+  
+      self.m_testutil.bufferDisplayInfo("Configuration Looptest Complete!", True)

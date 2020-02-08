@@ -8,7 +8,8 @@ import array
 
 import cmd_protocol as protocol
 import test_utility as testutil
-from distutils.log import fatal
+
+
 
 #from spi_cfg_mgr import configMgr
 
@@ -138,7 +139,7 @@ class spiIO:
         
     status_collect, _dc = pmact.ps_queue_submit(signal_queue, self.m_channel_handle, 0)
     self.m_in_signal_event=True
-    collect_length, collect_buf = self.procDevCollect(status_collect)
+    collect_length, collect_buf, _fatal_error = self.procDevCollect(status_collect)
     self.m_in_signal_event=False
     
 
@@ -280,13 +281,12 @@ class spiIO:
 
 
   debug_devCollect = True
-  def devCollect (self, collect):
+  def procDevCollect (self, collect):
 
     response_length=0
     fatal_error=False
-    fatal_count=0
-    max_fatal_responses=3
-    errmsg=None
+    fatal_errmsg=None
+    fatal_t=None
     
     '''
     collect intermediate results until:
@@ -300,54 +300,29 @@ class spiIO:
       
     '''
     while True:
-        t, _length, result = pmact.ps_collect_resp(collect, 100)
-        #****DEBUG****
+        t, _length, result = pmact.ps_collect_resp(collect, 100000)
+
         if self.debug_devCollect:
+          #****DEBUG****
           found, resp_msg=self.m_pm_msg.getResponseMessage(t)
-          resp_msg="in devCollect(): %s" % resp_msg
-
-          if not found:
-            fatal_error=True
-            fatal_count+=1
-            errmsg=resp_msg
-                                
-          if self.m_testutil.traceEnabled():
-            self.m_testutil.bufferTraceInfo(resp_msg)
+          if found:
+            self.m_testutil.bufferDetailInfo("in devCollect(): %s" % resp_msg)
           else:
-            print(resp_msg)
-            
-        if fatal_count > max_fatal_responses:
-          self.m_testutil.fatalError("DevCollect Spinning: %s" % errmsg)
-
-        #****DEBUG****  
+            result_msg=self.m_pm_msg.getResultString(t)
+            self.m_testutil.bufferDetailInfo("in devCollect(): %s" % result_msg )
+        
         if t == pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT:
-          if fatal_error==False:
-            break
-
-          '''
-          fatal devCollect error processing
-          '''
-          if self.m_testutil.traceEnabled():
-            self.m_testutil.bufferTraceInfo("in devCollect(): %s" % errmsg)
-          else:
-            self.m_testutil.fatalError("devCollect: Promira Reported Error \ndevCollect: %s" % errmsg)
-
-        elif t < 0:
-            errmsg=pmact.ps_app_status_string(t)
-            fatal_error=True
-            fatal_count+=1
-            print(errmsg)
-
+          break
+        
+        if t < 0:
+          fatal_error=True
+          return None, None, fatal_error
           
         if t == pmact.PS_SPI_CMD_READ:
             _ret, _word_size, buf = pmact.ps_collect_spi_read(collect, result)
             if self.debug_devCollect:
               input_msg="PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf))
-              if self.m_testutil.traceEnabled():
-                self.m_testutil.bufferTraceInfo(input_msg)
-              else:
-                print(input_msg)
-
+              self.m_testutil.bufferDetailInfo(input_msg)
             response_length+= len(buf)
             #response_buf += buf
     
@@ -358,11 +333,13 @@ class spiIO:
 
     return _ret, buf, fatal_error
   
-  def procDevCollect(self, collect):
-    _ret, buf, fatal_error = self.devCollect(collect)
+  def devCollect(self, collect):
+    self.m_testutil.bufferDetailInfo("in devCollect(): collect handle = %d" % collect)
+    
+    _ret, buf, fatal_error = self.procDevCollect(collect)
     
     if fatal_error:
-      self.signalEvent()
+      #self.signalEvent()
       self.m_testutil.fatalError("Error In DevCollect")
       
     return _ret, buf
@@ -422,6 +399,14 @@ class spiIO:
     # -> self.SpiResult
 
 
+    def submitQueue(queue_handle, channel_handle, ctrlID):
+      self.m_testutil.bufferDetailInfo(" queue_handle %d ; channel_handle %d ; ctrlID %d" 
+                                        % (queue_handle, channel_handle, ctrlID))
+      status_collect, dc = pmact.ps_queue_submit(queue_handle, channel_handle, ctrlID)
+      return status_collect, dc
+
+
+      
     if self.m_spi_initialized != True:
       self.m_testutil.fatalError("attempt to transact on uninitialized SPI bus")
         
@@ -437,8 +422,8 @@ class spiIO:
     if self.debug_devCollect:
       cmd_msg="cmd_byte= %02x" % cmd_byte
       if self.m_testutil.traceEnabled():
-        self.m_testutil.bufferTraceInfo(cmd_msg)
-        self.m_testutil.bufferTraceInfo(repr(spi_session.m_spi_phases))
+        self.m_testutil.bufferDetailInfo(cmd_msg)
+        self.m_testutil.bufferDetailInfo(repr(spi_session.m_spi_phases))
       else:
         print(cmd_msg)
     #****DEBUG****
@@ -481,11 +466,11 @@ class spiIO:
       
       while slave_busy:
         if first_pass:
-          status_collect, _dc = pmact.ps_queue_submit(start_queue, self.m_channel_handle, 0)
-          collect_length, collect_buf = self.procDevCollect(status_collect)
+          status_collect, _dc = submitQueue(start_queue, self.m_channel_handle, 0)
+          collect_length, collect_buf = self.devCollect(status_collect)
         else:
-          status_collect, _dc = pmact.ps_queue_submit(continue_queue, self.m_channel_handle, 0)
-          collect_length, collect_buf = self.procDevCollect(status_collect)
+          status_collect, _dc = submitQueue(continue_queue, self.m_channel_handle, 0)
+          collect_length, collect_buf = self.devCollect(status_collect)
           
         status=collect_buf[0]
         slave_busy = (status & 1 == 1)
@@ -542,11 +527,12 @@ class spiIO:
         pmact.ps_queue_spi_ss(session_queue, 0)
         pmact.ps_queue_spi_oe(session_queue, 0)        
 
-        collect_handle, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
+        collect_handle, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
         if collect_handle==None:
           self.m_testutil.fatalError("NoneType collected")
+
           
-        result_length, _dc = self.procDevCollect(collect_handle)
+        result_length, _dc = self.devCollect(collect_handle)
         pmact.ps_queue_destroy(session_queue)
         return self.SpiResult(True, None, None)
       else:
@@ -579,8 +565,8 @@ class spiIO:
       if spi_session.endOfSession():
         pmact.ps_queue_spi_ss(session_queue, 0)
         pmact.ps_queue_spi_oe(session_queue, 0)        
-        collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
-        collect_length, collect_buf = self.procDevCollect(collect)
+        collect, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
+        collect_length, collect_buf = self.devCollect(collect)
         pmact.ps_queue_destroy(session_queue)
         return self.SpiResult(True, collect_length, _dc)
         
@@ -662,8 +648,8 @@ class spiIO:
         pmact.ps_queue_spi_oe(session_queue, 0)
         #pmact.ps_queue_delay_ms(session_queue, 1)
           
-        collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
-        _in_length, _in_buf = self.procDevCollect(collect)
+        collect, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
+        _in_length, _in_buf = self.devCollect(collect)
         pmact.ps_queue_destroy(session_queue)
         
         return self.SpiResult(True, data_length, data_buffer)
@@ -680,11 +666,12 @@ class spiIO:
         pmact.ps_queue_spi_ss(session_queue, 0)
         pmact.ps_queue_spi_oe(session_queue, 0)
         
-        collect, _dc = pmact.ps_queue_submit(session_queue, self.m_channel_handle, 0)
+        
+        collect, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
         
 
           
-        collect_length, collect_buf = self.procDevCollect(collect)
+        collect_length, collect_buf = self.devCollect(collect)
         
         if not isinstance(collect_buf, coll.Iterable):
           self.m_testutil.fatalError("return buf not 'iterable'")

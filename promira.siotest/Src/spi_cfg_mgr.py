@@ -75,8 +75,8 @@ class configVal:
     clk_kHz         = [ 1000, 3000, 15000, 17500, 20000, 25000, 27000 , 29000, 30000, 31000, 32000, 40000, 45000, 50000, 55000, 60000, 61000, 62000, 65000],
     address_base    = [0],   # [0, ... ,0x10000],
     tgt_v1_fixed    = [None], #, [3.3, 5.0],
-    tgt_v2_variable = [3.3],#[1.6, 1.8, 3.3 ],
-    eeprom_config   = [eeprom_devices.gdmcc8MB3V3])
+    tgt_v2_variable = [1.6],#[1.6, 1.8, 3.3 ],
+    eeprom_config   = [eeprom_devices.gdmcc32MB1V8])
   #, eeprom.eeprom.gdmcc8MB3V3])
   pass
 

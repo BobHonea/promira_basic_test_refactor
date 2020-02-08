@@ -111,7 +111,7 @@ class promactMessages:
   def appStatusString(self, app_status):
     return(pmact.ps_app_status_string(app_status))
   
-  def resultString(self, result_code):
+  def getResultString(self, result_code):
     for item in self.PROMACT_ERRORS:
       if item[0]==result_code:
         return item[1]
@@ -120,7 +120,7 @@ class promactMessages:
     for colresp in self.COLLECT_RESPONSE_MSG:
       if colresp.code==response:
         return True, colresp.message
-    return False, "collect response message not found"
+    return False, ("collect response message for code %d not found" % response)
 
   def showCollectResponseMsg(self, response):
     if response not in self.COLLECT_RESPONSES:

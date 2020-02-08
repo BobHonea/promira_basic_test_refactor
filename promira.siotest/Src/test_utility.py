@@ -7,6 +7,8 @@ import math
 from _random import Random
 
 
+
+
 class testUtil:
   m_instantiated=False
   m_random=Random()
@@ -16,6 +18,11 @@ class testUtil:
   m_patterned_not_random_arrays = True
   m_page_size=256  # eeprom page size (universal)
   m_trace_buffer=[]
+  m_trace_protect_index=0
+  m_detail_trace  = False
+  m_display_trace = False
+  m_detail_echo   = False
+  m_display_echo  = False
   _instance=None
   
   def __new__(cls):
@@ -49,21 +56,71 @@ class testUtil:
     self.m_trace_buffer=[]
     self.m_trace_enabled=True
     self.m_trace_depth=trace_depth
-
+    self.m_trace_protect_depth=0
+    
+  '''
+  protectTraceBuffer
+      locks the initial contents into the Trace Buffer
+      sets the flush index
+      data in the trace buffer when this function is called
+      will NEVER be flushed until initTraceBuffer.
+  
+    The Trace Depth is measured from the end of the protect
+    index.
+  '''
+  def protectTraceBuffer(self):
+    if self.m_trace_enabled:
+      self.m_trace_protect_depth=self.m_trace_depth
     
   def disableTrace(self):
     self.m_trace_enabled=False
 
-  def bufferTraceInfo(self, string_info):
+  
+  def detailTraceOff(self):
+    if self.m_trace_enabled:
+      self.m_detail_trace=False
+    
+  def displayTraceOff(self):
+    if self.m_trace_enabled:
+      self.m_display_trace=False
+
+  def detailTraceOn(self):
+    if self.m_trace_enabled:
+      self.m_detail_trace=True
+    
+  def displayTraceOn(self):
+    if self.m_trace_enabled:
+      self.m_display_trace=True
+      
+  def bufferDisplayInfo(self, string_info, echo=True):
+    if self.m_display_trace:
+      self.bufferTraceInfo(string_info, echo)
+    if self.m_display_echo or echo:
+      print(string_info)
+      
+  def bufferDetailInfo(self, string_info, echo=False):
+    if self.m_detail_trace:
+      self.bufferTraceInfo(string_info, echo)
+      if self.m_detail_echo or echo:
+        print(string_info)
+        
+  def bufferTraceInfo(self, string_info, echo=False):
     if self.m_trace_enabled:
       if self.m_trace_depth>0:
-        if len(self.m_trace_buffer) >= self.m_trace_depth:
-          self.m_trace_buffer.pop(0)
+        if len(self.m_trace_buffer) >= (self.m_trace_depth+self.m_trace_protect_depth):
+          self.m_trace_buffer.pop(self.m_trace_protect_depth)
           
       self.m_trace_buffer.append(string_info)
-
+  
   def flushTraceBuffer(self):
-    self.m_trace_buffer = []
+    if self.m_trace_enabled:
+      self.m_trace_buffer = self.m_trace_buffer[:self.m_trace_protect_depth]
+
+  def traceEchoOn(self):
+    self.m_trace_echo=True
+
+  def traceEchoOff(self):
+    self.m_trace_echo=False
 
   def dumpTraceBuffer(self):
     if self.m_trace_enabled:
@@ -163,7 +220,7 @@ class testUtil:
   def printArrayHexDump(self, label, data_array=None):
     
     if not type(data_array)==array.ArrayType or len(data_array)==0:
-      print("Hexdump:  array is empty")
+      self.bufferDisplayInfo("Hexdump:  array is empty")
       return
     
     bytes_per_line = 32
@@ -171,7 +228,7 @@ class testUtil:
     array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
     dump_bytes = array_size
     dump_index = 0
-    print("%s [ 0x%x bytes ]" % (label, array_size))
+    self.bufferDisplayInfo("%s [ 0x%x bytes ]" % (label, array_size))
     for line in range(array_lines):
       linestart = line * bytes_per_line
       linestring = " %02X : " % linestart
@@ -183,7 +240,7 @@ class testUtil:
       for dump_index in range(dump_index, dump_index + line_bytes):
         value = data_array[dump_index]
         linestring = linestring + " %02X" % value
-      print(linestring)
+      self.bufferDisplayInfo(linestring)
  
  
  
@@ -222,7 +279,7 @@ class testUtil:
             diff_text[index]=">%02x"%reference
           last_index=index
           
-        print('      '+''.join(diff_text))
+        self.bufferDisplayInfo('      '+''.join(diff_text))
         return False
       
       else:
@@ -230,7 +287,7 @@ class testUtil:
     
     
     if not type(data_array)==array.ArrayType or len(data_array)==0:
-      print("Hexdump:  array is empty")
+      self.bufferDisplayInfo("Hexdump:  array is empty")
       return
     
     bytes_per_line = 32
@@ -238,7 +295,7 @@ class testUtil:
     array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
     dump_bytes = array_size
     dump_index = 0
-    print("%s [ 0x%x bytes ]" % (label, array_size))
+    self.bufferDisplayInfo("%s [ 0x%x bytes ]" % (label, array_size))
     
     for line in range(array_lines):
       line_start = line * bytes_per_line
@@ -254,13 +311,13 @@ class testUtil:
       pattern_match=self.arraysMatch(data_sub_array, pattern_sub_array)
 
       if not pattern_match:
-        print("")
+        self.bufferDisplayInfo("")
         
       for dump_index in range(dump_index, dump_index + line_bytes):
         value = data_array[dump_index]
         line_string = line_string + " %02X" % value
       
-      print(line_string)
+      self.bufferDisplayInfo(line_string)
       if not pattern_match:
         printDiffLine(data_array[line_start:line_end], pattern_array[line_start:line_end])
         
