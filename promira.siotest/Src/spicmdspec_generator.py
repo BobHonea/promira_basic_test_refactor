@@ -123,7 +123,8 @@ class spiDescriptorApi(object):
   m_datamaxcycles_ndx = None
   m_iotype_ndx        = None
 
-  unique_values       = None
+  m_phase_descriptor_tuplets     = None
+  m_command_set       = None
   m_table_crc32       = None
 
   
@@ -290,13 +291,16 @@ class spiDescriptorApi(object):
 
   def analyzeDescriptorData(self):
     
-    '''
-    discover unique values for each data width mode
-    '''
     
-    self.m_unique_values=[len(self.m_header)]
-    for _ndx in range(len(self.m_unique_values)):
-      self.m_unique_values=[]
+    
+    '''
+    discover unique phase descriptor tuplets for each data width mode
+    '''
+    phase_descriptor_columns=[self.m_cmd_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]
+    
+    self.m_phase_descriptor_tuplets=[]
+    for _ndx in phase_descriptor_columns:
+      self.m_phase_descriptor_tuplets.append([])
       
     self.m_command_set = []
     
@@ -315,8 +319,11 @@ class spiDescriptorApi(object):
         else:
           iowidth=mode[1]
         
-        for value_ndx in range(len(self.m_header)):
-            
+        for value_ndx in phase_descriptor_columns:
+          
+          '''
+          building command set
+          '''
           if value_ndx == self.m_cmd_ndx:
             '''
             build command list
@@ -337,14 +344,14 @@ class spiDescriptorApi(object):
                                          iowidth=iowidth_list,
                                          modephase=has_modephase)
 
-            self.command_set.append(cmd_descriptor)
+            self.m_command_set.append(cmd_descriptor)
 
 
             for iowidth in iowidth_list:
-              if [iowidth] not in self.m_unique_values[self.m_cmd_ndx]:
-                self.m_unique_values[self.m_cmd_ndx].append([iowidth])
+              if [iowidth] not in self.m_phase_descriptor_tuplets[self.m_cmd_ndx]:
+                self.m_phase_descriptor_tuplets[self.m_cmd_ndx].append([iowidth])
 
-          elif value_ndx in [self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]:
+          else:
             '''
             process variant annotations for mixed iowidth commands
             '''
@@ -383,8 +390,8 @@ class spiDescriptorApi(object):
             '''
             compact list: do not store duplicates
             '''              
-            if value not in self.m_unique_values[value_ndx]:
-              self.m_unique_values[value_ndx].append(row[value_ndx])
+            if value not in self.m_phase_descriptor_tuplets[value_ndx]:
+              self.m_phase_descriptor_tuplets[value_ndx].append(row[value_ndx])
               
 
           row_ndx+=1
@@ -406,6 +413,7 @@ class spiDescriptorApi(object):
     process datacycle value-pair [datamin, datamax]
     '''
     self.m_unique_dataminmax_values=[]
+    
     
     for row in self.m_descriptor_data:
       dataminmax=[row[self.m_datamincycles_ndx], row[self.m_datamaxcycles_ndx]]
@@ -436,21 +444,21 @@ class spiDescriptorApi(object):
     build cmd phases
     '''
     self.m_cmd_phases=[]
-    for value in self.m_unique_values[self.m_cmd_ndx]:
+    for value in self.m_phase_descriptor_tuplets[self.m_cmd_ndx]:
       self.m_cmd_phases.append(cmdPhx(mode=value[0]))
 
     '''
     build addr phases
     '''
     self.m_addr_phases=[]
-    for value in self.m_unique_values[self.m_addrcycles_ndx]:
+    for value in self.m_phase_descriptor_tuplets[self.m_addrcycles_ndx]:
       self.m_addr_phases.append(addrPhx(mode=value[0], length=value[1]))
       
     '''
     build dummy phases
     '''
     self.m_dummy_phases=[]
-    for value in self.m_unique_values[self.m_dummycycles_ndx]:
+    for value in self.m_phase_descriptor_tuplets[self.m_dummycycles_ndx]:
       self.m_dummy_phases.append(dummyPhx(mode=value[0], length=value[1]))
 
 
@@ -458,7 +466,7 @@ class spiDescriptorApi(object):
     build wren phases
     '''
     self.m_wren_phases=[]
-    for value in self.m_unique_values[self.m_wren_cmd_ndx]:
+    for value in self.m_phase_descriptor_tuplets[self.m_wren_cmd_ndx]:
       self.m_wren_phases.append(wrenPhx(mode=value[0]))
       
     '''
@@ -509,22 +517,22 @@ class spiDescriptorApi(object):
         '''
         
         cmd_tuple=(cmd_mode)
-        cmdPhx_ndx=self.m_unique_values[self.m_cmd_ndx].index( (cmd_tuple) )
-        thisCmdPhx=self.m_unique_values[self.m_cmd_ndx][cmdPhx_ndx]
+        cmdPhx_ndx=self.m_phase_descriptor_tuplets[self.m_cmd_ndx].index( (cmd_tuple) )
+        thisCmdPhx=self.m_phase_descriptor_tuplets[self.m_cmd_ndx][cmdPhx_ndx]
         
         #_dc is 'don't care'
         iowidth, addrcycles, _dc = getPhaseAttributes(addr_mode, self.m_addrcycles_ndx)
-        addrPhx_ndx=self.m_unique_values[self.m_addrcycles_ndx].index( (iowidth, addrcycles) )
-        thisAddrPhx=self.m_unique_values[self.m_addrcycles_ndx][addrPhx_ndx]
+        addrPhx_ndx=self.m_phase_descriptor_tuplets[self.m_addrcycles_ndx].index( (iowidth, addrcycles) )
+        thisAddrPhx=self.m_phase_descriptor_tuplets[self.m_addrcycles_ndx][addrPhx_ndx]
 
         iowidth, dummycycles, _dc = getPhaseAttributes(dummy_mode, self.m_dummycycles_ndx)
-        dummyPhx_ndx=self.m_unique_values[self.m_dummycycles_ndx].index( ( iowidth, dummycycles))
-        thisDummyPhx=self.m_unique_values[self.m_dummycycles_ndx][dummyPhx_ndx]
+        dummyPhx_ndx=self.m_phase_descriptor_tuplets[self.m_dummycycles_ndx].index( ( iowidth, dummycycles))
+        thisDummyPhx=self.m_phase_descriptor_tuplets[self.m_dummycycles_ndx][dummyPhx_ndx]
         
         iowidth, datacycles, if_burst = getPhaseAttributes(dummy_mode, self.m_dummycycles_ndx)
         thisDataPhx=(iowidth, if_burst, datacycles[0], datacycles[1])
-        dataPhx_ndx=self.m_unique_values[self.m_datacycles_ndx].index( thisDataPhx )
-        thisDataPhx=self.m_unique_values[self.m_datacycles_ndx][dataPhx_ndx]
+        dataPhx_ndx=self.m_phase_descriptor_tuplets[self.m_datacycles_ndx].index( thisDataPhx )
+        thisDataPhx=self.m_phase_descriptor_tuplets[self.m_datacycles_ndx][dataPhx_ndx]
         
         
         transaction_tuple= (thisCmdPhx, thisAddrPhx, thisDummyPhx, thisDataPhx)
