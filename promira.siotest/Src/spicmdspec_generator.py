@@ -65,6 +65,12 @@ modePhx=coll.namedtuple("modePhx", "mode length")
 dummyPhx=coll.namedtuple("dummyPhx", "mode length")
 dataPhx=coll.namedtuple("dataPhx", "mode burst min_length max_length")
 SpiCmdSpec=namedtupleX("SpiCmdSpec", "spec_id iowMax busy_wait send_wren cmd mode address dummy data", [None, None, None, None, None, None, None, None, None])
+cmdDescriptor=coll.namedtuple('cmdDescriptor', 'index mnemonic code iotype iowidth modephase')
+
+IOTYPE_NODATA=0
+IOTYPE_READ=1
+IOTYPE_WRITE=2
+
 
 class spiDescriptorApi(object):
 
@@ -120,6 +126,9 @@ class spiDescriptorApi(object):
   unique_values       = None
   m_table_crc32       = None
 
+  
+  m_command_set       = None
+  
   def __init__(self):
     pass
   
@@ -276,8 +285,8 @@ class spiDescriptorApi(object):
   _burstread      = 'B'
   _modephase      = 'M'
   _unlimited      = 'U'
-  _iotype         = ['read', 'write', 'nodata']
-
+  _iotype_string  = ['nodata', 'read', 'write']
+  _iotype_code    = [ IOTYPE_NODATA, IOTYPE_READ, IOTYPE_WRITE]
 
   def analyzeDescriptorData(self):
     
@@ -289,12 +298,15 @@ class spiDescriptorApi(object):
     for _ndx in range(len(self.m_unique_values)):
       self.m_unique_values=[]
       
+    self.m_command_set = []
+    
     '''
     across each session phase element of command description
     
       store unique combinations session phase parameters in 
       - session specific lists
     '''
+    row_ndx=0
     for row in self.m_descriptor_data:
       for mode in [[self.m_spimode_ndx, 1], [self.m_sqimode_ndx,4]]:
         # use the implicit io mode (single/quad)
@@ -304,7 +316,35 @@ class spiDescriptorApi(object):
           iowidth=mode[1]
         
         for value_ndx in range(len(self.m_header)):
-          if value_ndx in [self.m_cmd_ndx, self.m_iotype_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]:
+            
+          if value_ndx == self.m_cmd_ndx:
+            '''
+            build command list
+            build cmdPhx uniques
+            '''
+            if row[self.m_iotype_ndx] not in self._iotype_string:
+              print("table error: iotype, row %d", row_ndx)
+              sys.exit(-1)
+
+            iowidth_list=[row[self.m_spimode_ndx]!='', row[self.m_sqimode_ndx]!='']
+            has_modephase=self._modephase in row[self.m_variant_ndx]
+            iotype_code_index=self._iotype_string.index(row[self.m_iotype_ndx])
+            iotype_code=self._iotype_code[iotype_code_index]
+            cmd_descriptor=cmdDescriptor(index=row_ndx,
+                                         mnemonic=row[self.m_mnemonic_ndx],
+                                         code=row[self.m_cmd_ndx],
+                                         iotype=iotype_code,
+                                         iowidth=iowidth_list,
+                                         modephase=has_modephase)
+
+            self.command_set.append(cmd_descriptor)
+
+
+            for iowidth in iowidth_list:
+              if [iowidth] not in self.m_unique_values[self.m_cmd_ndx]:
+                self.m_unique_values[self.m_cmd_ndx].append([iowidth])
+
+          elif value_ndx in [self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]:
             '''
             process variant annotations for mixed iowidth commands
             '''
@@ -340,13 +380,14 @@ class spiDescriptorApi(object):
             if burstread:
               value.append(self._burstread)
 
-              
+            '''
+            compact list: do not store duplicates
+            '''              
             if value not in self.m_unique_values[value_ndx]:
               self.m_unique_values[value_ndx].append(row[value_ndx])
               
-          else:
-            continue
 
+          row_ndx+=1
 
   '''
   generateTransactionSpecs
