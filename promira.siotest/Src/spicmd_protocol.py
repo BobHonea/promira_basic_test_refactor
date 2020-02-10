@@ -126,6 +126,7 @@ dataSpec_3=LengthSpec(fixed=3)
 dataSpec_1plus=LengthSpec(rangeMin=1)
 dataSpec_2plus=LengthSpec(rangeMin=2)
 dataSpec_3plus=LengthSpec(rangeMin=3)
+dataSpec_1to6=LengthSpec(rangeMin=1, rangeMax=6)
 dataSpec_page=LengthSpec(rangeMin=1, rangeMax=256)
 dataSpec_Nplus=LengthSpec(burstMode=True)
 dataSpec_reg18=LengthSpec(rangeMin=1, rangeMax=18)
@@ -272,6 +273,8 @@ SPICMDTYPE_1C=SpiCmdSpec(spec_id=0x1C, iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, add
 SPICMDTYPE_1D=SpiCmdSpec(spec_id=0x1D, iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, address=w1L3AddrPhase, dummy=x8DummyPhase, data=w2Data_1plus)
 SPICMDTYPE_1E=SpiCmdSpec(spec_id=0x1E, iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, mode=w1ModePhase,      dummy=x1DummyPhase, data=w4Data_2)
 SPICMDTYPE_1F=SpiCmdSpec(spec_id=0x1F, iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, data=w1Data_2plus)
+SPICMDTYPE_20=SpiCmdSpec(spec_id=0x20, iowMax=SPIIO_QUAD,    cmd=w1CmdPhase, address=w4L3AddrPhase, data=w4Data_page)
+SPICMDTYPE_21=
 
 
 SPICMDTYPES = [ SPICMDTYPE_00, SPICMDTYPE_01, SPICMDTYPE_02, SPICMDTYPE_03, SPICMDTYPE_04,
@@ -279,7 +282,7 @@ SPICMDTYPES = [ SPICMDTYPE_00, SPICMDTYPE_01, SPICMDTYPE_02, SPICMDTYPE_03, SPIC
                 SPICMDTYPE_09, SPICMDTYPE_10, SPICMDTYPE_11, SPICMDTYPE_12, SPICMDTYPE_13,
                 SPICMDTYPE_14, SPICMDTYPE_15, SPICMDTYPE_16, SPICMDTYPE_17, SPICMDTYPE_18,
                 SPICMDTYPE_19, SPICMDTYPE_1A, SPICMDTYPE_1B, SPICMDTYPE_1C, SPICMDTYPE_1D,
-                SPICMDTYPE_1E, SPICMDTYPE_1F]
+                SPICMDTYPE_1E, SPICMDTYPE_1F, SPICMDTYPE_20]
 
 SPICMD_NOP        = [NOP,       0x00,         IOTYPE_NONE]
 SPICMD_RSTEN      = [RSTEN,     0x00,         IOTYPE_NONE]
@@ -298,17 +301,19 @@ SPICMD_SDOREADX   = [SDOREAD,   0x18,         IOTYPE_READ]
 SPICMD_SDIOREAD   = [SDIOREAD,  0x08,         IOTYPE_READ]
 SPICMD_SETBURST   = [SETBURST,  [0x09, 0x0A], IOTYPE_WRITE]
 SPICMD_RBSQI_WRAP = [RBSQI_WRAP,0x0C,         IOTYPE_READ]
-SPICMD_RBSPI_WRAP = [RBSPI_WRAP,0x0D,         IOTYPE_READ]
-SPICMD_JEDEC_ID   = [JEDEC_ID,  0x0C,         IOTYPE_READ]
+SPICMD_RBSPI_WRAP = [RBSPI_WRAP,0x0B,         IOTYPE_READ]
+SPICMD_JEDEC_ID   = [JEDEC_ID,  0x0D,         IOTYPE_READ]
 SPICMD_QUAD_JID   = [QUAD_JID,  0x0E,         IOTYPE_READ]
-SPICMD_SFDP       = [SFDP,      0x11,         IOTYPE_READ]
+SPICMD_SFDP       = [SFDP,      0x10,         IOTYPE_READ]
 SPICMD_WREN       = [WREN,      0x00,         IOTYPE_NONE]
 SPICMD_WRDI       = [WRDI,      0x00,         IOTYPE_NONE]
 SPICMD_SE         = [SE,        [0x12, 0x13], IOTYPE_NONE]
 SPICMD_BE         = [BE,        [0x12, 0x13], IOTYPE_NONE]
-SPICMD_CE         = [CE,        0x00,         IOTYPE_NONE]
+SPICMD_CE         = [CE,        [0x00, 0x01], IOTYPE_NONE]
 SPICMD_PP         = [PP,        [0x14, 0x15], IOTYPE_WRITE]
-SPICMD_QPP        = [QPP,       0x14,         IOTYPE_WRITE]
+
+SPICMD_QPP        = [QPP,       0x20,         IOTYPE_WRITE]
+
 SPICMD_WRSU       = [WRSU,      0x00,         IOTYPE_NONE]
 SPICMD_WRRE       = [WRRE,      0x00,         IOTYPE_NONE]
 SPICMD_RBPR       = [RBPR,      [0x11, 0x12], IOTYPE_READ]

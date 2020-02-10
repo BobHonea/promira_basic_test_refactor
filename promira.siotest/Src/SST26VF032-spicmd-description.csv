@@ -1,0 +1,83 @@
+MANUFACTURER,MICROCHIP,,,,,,,,,,
+DEVICE,"SST26VF032B, SST26VF032BA",,,,,,,,,,
+JEDEC_ID,BFH 26H 42H ,,,,,,,,,,
+MEM_SIZE,32MB,,,,,,,,,,
+DEVICE_VDD,3.3V,,,,,,,,,,
+CMD_COUNT,42,,,,,,,,,,
+COMPILER_VERSION,0.1,,,,,,,,,,
+TRANSCRIBER,honea@google.com,,,,,,,,,,
+TRANSCRIPT_VERSION,0.1,,,,,,,,,,
+TRANSCRIPTION_DATE,02/09/19,,,,,,,,,,
+COMMENT,early development of this format,,,,,,,,,,
+LEGEND,#: Skip Line,,,,,,,,,,
+LEGEND,S=Single I/O,,,,,,,,,,
+LEGEND,D=Dual I/O,,,,,,,,,,
+LEGEND,Q=Quad I/O,,,,,,,,,,
+LEGEND,B=BurstRead,,,,,,,,,,
+LEGEND,"M=ModeByte (Modifies CMD,ADDR Phases) ***",,,,,,,,,,
+LEGEND,U=Unlimited Cycles,,,,,,,,,,
+LEGEND,"***: Refernce SDIOR, SQIOR, HSREAD/sqimode",,,,,,,,,,
+#,,,,,,,,,,,
+#,,,,,,,,,,,
+TABLE_HEADER,mnemonic,description,cmd,spimode,sqimode,addrcycles,dummycycles,datamincycles,datamaxcycles,iotype,variant
+TABLE_DATA,NOP,No Operation,00H,X,X,0,0,0,,nodata,
+TABLE_DATA,RSTEN,Reset Enable,66H,X,X,0,0,0,,nodata,
+TABLE_DATA,RST5,Reset Memory,99H,X,X,0,0,0,,nodata,
+TABLE_DATA,EQIO,Enable Quad I/O,38H,X,,0,0,0,,nodata,
+TABLE_DATA,RSTQIO,Reset Quad I/O,FFH,X,X,0,0,0,,nodata,
+TABLE_DATA,RDSR,Read Status Register,05H,X,,0,0,1,U,read,
+TABLE_DATA,RDSR,Read Status Register,05H,,X,0,1,1,U,read,
+TABLE_DATA,WRSR,Write Status Register,01H,X,X,0,0,2,,write,
+TABLE_DATA,RDCR,"Read Configuration 
+Register",35H,X,,0,0,1,U,read,
+TABLE_DATA,RDCR,"Read Configuration 
+Register",35H,,X,0,1,1,U,read,
+TABLE_DATA,READ,Read Memory,03H,X,,3,0,1,U,read,
+TABLE_DATA,HSREAD,"Read Memory at Higher 
+Speed",0BH,X,,3,1,1,U,,
+TABLE_DATA,HSREAD,"Read Memory at Higher 
+Speed",0BH,,X,3,3,1,U,read,M
+TABLE_DATA,SQOR,SPI Quad Output Read,6BH,X,,3,1,1Q,U,read,
+TABLE_DATA,SQIOR,SPI Quad I/O Read,EBH,X,,3Q,3Q,1Q,U,read,M
+TABLE_DATA,SDOR,SPI Dual Output Read,3BH,X,,3,1,2D,U,read,
+TABLE_DATA,SDIOR,SPI Dual I/O Read,BBH,X,,3D,1D,1D,U,read,M
+TABLE_DATA,SB,Set Burst Length,C0H,X,X,0,0,1,,write,
+TABLE_DATA,RBSQI,SQI Read Burst with Wrap,0CH,,X,3,3,8B,U,read,
+TABLE_DATA,RBSPI,SPI Read Burst with Wrap,ECH,X,,3,3,8B,U,read,
+TABLE_DATA,JEDECID,JEDEC-ID Read,9FH,X,,0,0,3,U,read,
+TABLE_DATA,QJEDECID,Quad I/O J-ID Read,AFH,,X,0,1,3,U,read,
+TABLE_DATA,SFDP,"Serial Flash Discoverable 
+Parameters",5AH,X,,3,1,1,U,read,
+TABLE_DATA,WREN,Write Enable,06H,X,X,0,0,0,,nodata,
+TABLE_DATA,WRDI,Write Disable,04H,X,X,0,0,0,,nodata,
+TABLE_DATA,SE,"Erase 4 KBytes of Memory 
+Array",20H,X,X,3,0,0,,write,
+TABLE_DATA,BE,"Erase 64, 32 or 8 KBytes of 
+Memory Array",D8H,X,X,3,0,0,,write,
+TABLE_DATA,CE,Erase Full Array,C7H,X,X,0,0,0,,write,
+TABLE_DATA,PP,Page Program,02H,X,X,3,0,1,256,write,
+TABLE_DATA,QPP,"SQI Quad Page 
+Program",32H,X,,3,0,1,256,write,
+TABLE_DATA,WRSU,Suspends Program/Erase,B0H,"X
+X",,0,0,0,,nodata,
+TABLE_DATA,WRRE,Resumes Program/Erase,30H,"X
+X",,0,0,0,,nodata,
+TABLE_DATA,RBPR,"Read Block-Protection 
+Register",72H,X,,0,0,1,18,read,
+TABLE_DATA,RBPR,"Read Block-Protection 
+Register",72H,,X,0,1,1,18,read,
+TABLE_DATA,WBPR,"Write Block-Protection 
+Register",42H,X,X,0,0,1,18,write,
+TABLE_DATA,LBPR,"Lock Down 
+Block-Protection
+Register",8DH,X,X,0,0,1,,nodata,
+TABLE_DATA,NVWLDR,"non-Volatile Write Lock-
+Down Register",E8H,X,X,0,0,1,18,write,
+TABLE_DATA,ULBPR,"Global Block Protection 
+Unlock",98H,X,X,0,0,0,,nodata,
+TABLE_DATA,RSID,Read Security ID,88H,X,,2,1,1,2048,read,
+TABLE_DATA,RSID,Read Security ID,88H,,X,2,3,1,2048,read,
+TABLE_DATA,PSID,"Program User 
+Security ID area",A5H,X,X,2,0,1,256,write,
+TABLE_DATA,LSID,Lockout Security ID Programming,85H,X,X,0,0,0,,nodata,
+TABLE_END,6AC084AF,,,,,,,,,,
