@@ -364,8 +364,9 @@ class spiDescriptorApi(object):
             cycles with overrides or augmentations
             currently: iowidth overrides, burstread specification
             '''
-            if not row_entry.isnumeric():
-
+            if row_entry.isnumeric():
+              cycles=row_entry
+            else:
               # override iowidth ?
               for iowidth_code in self._iowidth_code:
                 if iowidth_code in row_entry:
@@ -383,8 +384,9 @@ class spiDescriptorApi(object):
                 print("table syntax error")
                 sys.exit(-1)
                 
+            
             value=[this_iowidth, cycles]
-            if burstread:
+            if burstread == True:
               value.append(self._burstread)
 
             '''
