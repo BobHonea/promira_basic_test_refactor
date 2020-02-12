@@ -3,6 +3,7 @@ Created on Feb 8, 2020
 
 @author: Asus
 '''
+from builtins import False, None
 
 
 
@@ -289,6 +290,77 @@ class spiDescriptorApi(object):
   _iotype_string  = ['nodata', 'read', 'write']
   _iotype_code    = [ IOTYPE_NODATA, IOTYPE_READ, IOTYPE_WRITE]
 
+  class compactTypedList(object):
+    
+    def __init__(self, itemType):
+      self.m_list=[] 
+      self.m_index=None
+      self.m_item_type=itemType
+      
+    def submitItem(self, item):
+      if isinstance(item, self.m_item_type):
+        if item not in self.m_list:
+          self.m_list.append(item)
+          return True
+      return False
+
+    def stored(self, item):
+      if isinstance(item, self.m_item_type):
+        return item in self.m_list
+      return False
+
+    def firstItem(self):
+      self.m_index=0
+      return self.nextItem()
+    
+    def nextItem(self):
+      index=self.m_index
+      self.m_index+=1
+      return self.m_list[index]
+
+    def count(self):
+      return len(self.m_list)
+    
+
+  class compactKeyedLists(object):
+    
+    def __init__(self, key_list, type_list):
+      self.m_keys=key_list
+      self.m_index_range=range(len(key_list))
+      self.m_compact_lists=[ self.compactList(type_list[_ndx]) for _ndx in self.m_index_range]
+
+    def listCount(self):
+      return len(self.m_compact_lists)
+
+    def listKeyIndex(self, key):
+      if key in self.m_keys:
+        return self.m_keys.index(key)
+
+    def fetchList(self, key ):
+      return(self.m_compact_lists[self.listKeyIndex(key)])
+
+    def submitItem(self, item, key):
+      return(self.fetchList(key).submitItem(item))
+      
+    def indexSubmitItem(self, item, index):
+      return(self.m_compact_lists[index].submitItem(item))
+        
+    def stored(self, item, key):
+      return(self.fetchList(key).stored())
+    
+    def firstItem(self, item, key):
+      return(self.fetchList(key).firstItem())
+    
+    def nextItem(self, key):
+      return(self.fetchList(key).nextItem())
+
+    def count(self, key):
+      return(self.fetchList(key).count())
+
+      
+      
+  m_phase_data_lists=None
+  m_phase_descriptor_lists=None
   def analyzeDescriptorData(self):
     
     
@@ -296,8 +368,16 @@ class spiDescriptorApi(object):
     '''
     discover unique phase descriptor tuplets for each data width mode
     '''
-    phase_descriptor_columns=[self.m_cmd_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]
+    phase_data_columns=[self.m_cmd_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]
+    phase_data_types=[ list for _ndx in phase_data_columns]
     
+    phase_descriptor_columns=[self.m_cmd_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]
+    phase_descriptor_types=[busyPhx, wrenPhx, cmdPhx, addrPhx, dummyPhx, dataPhx]
+
+    self.m_phase_data_lists=self.compactTypedLists(phase_data_columns, phase_data_types)
+    self.m_phase_descriptor_lists=self.compactKeyedLists(phase_descriptor_columns, phase_descriptor_types)
+
+    self.m_phase_descriptor_tuplets=self.compactKeyedLists(phase_descriptor_columns, )
     self.m_phase_descriptor_tuplets=[]
     for _ndx in phase_descriptor_columns:
       self.m_phase_descriptor_tuplets.append([])
