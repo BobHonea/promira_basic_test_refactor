@@ -377,10 +377,6 @@ class spiDescriptorApi(object):
     self.m_phase_data_lists=self.compactTypedLists(phase_data_columns, phase_data_types)
     self.m_phase_descriptor_lists=self.compactKeyedLists(phase_descriptor_columns, phase_descriptor_types)
 
-    self.m_phase_descriptor_tuplets=self.compactKeyedLists(phase_descriptor_columns, )
-    self.m_phase_descriptor_tuplets=[]
-    for _ndx in phase_descriptor_columns:
-      self.m_phase_descriptor_tuplets.append([])
       
     self.m_command_set = []
     
