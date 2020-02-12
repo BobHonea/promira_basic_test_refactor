@@ -64,6 +64,9 @@ import test_utility as testutil
 import promactive_msg as pmmsg 
 import time
 from cmd_protocol import RVCFG
+from vernier_histogram import result2DHistogram
+
+
 
 
 
@@ -115,6 +118,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_rxdata_array           = pmact.array_u08(self.m_pagesize)
     self.m_txdata_array           = pmact.array_u08(self.m_pagesize)
     self.m_random_page_array      = pmact.array_u08(self.m_pagesize)
+    
+    self.m_configVal      = spicfg.configVal()
     return
     
 
@@ -150,7 +155,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
           self.m_testutil.bufferDetailInfo("EEPROM vdd="+str(eeprom_vdd)+"V, supply by Promira is "+str(var)+"V: OK")
           return True
           
-    self.m_testutil.bufferDisplayInfo("Promira Supply and EEPROM vdd mismatch")
+    self.m_testutil.bufferDetailInfo("Promira Supply and EEPROM vdd mismatch")
     return False
   
   
@@ -189,9 +194,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
       
     if not self.m_testutil.arraysMatch(rxdata_array, pattern_array):
-        self.m_testutil.bufferDisplayInfo("%s comparison fault" % cmd_namestring)
+        self.m_testutil.bufferDetailInfo("%s comparison fault" % cmd_namestring)
         if verbose:
-          self.m_testutil.bufferDisplayInfo("Sector Address %x" % address)
+          self.m_testutil.bufferDetailInfo("Sector Address %x" % address)
 
           self.m_testutil.printArrayHexDumpWithErrors("EEProm %s" % cmd_namestring, rxdata_array, pattern_array)
           
@@ -215,9 +220,28 @@ class promiraSpiTestApp(usertest.SwUserTest):
     read_dual_data=True
     read_hispeed_data=True
     eeprom_unlocked=False
+    break_subtest_on_single_read_fail=False
+    break_frequency_test_on_subtest_fail=True
+    break_trial_on_nopass_frequency=True
+    use_auto_vernier=True
+    auto_vernier_cycle=5
+    auto_vernier_cycle_count=0
 
-    first_loop=True
+    sector_read_count=0
+    #first_loop=True
     subtest_loops=10
+    
+    configOptions=self.m_configVal.getSpiConfigOptions()
+    parameter_values  = configOptions.clk_kHz
+    parameter_labels  = [ ("%02.3f" % (float(frequency)/1000)) for frequency in configOptions.clk_kHz ]
+    parameter_units_label = "MHz"
+    data_values       = [ True, False ]
+    data_labels       = [ 'Pass', 'Fail'
+                         ]
+    self.m_histogram=result2DHistogram( parameter_values, parameter_labels, 
+                                        parameter_units_label, 
+                                        data_values, data_labels)
+    
     spi_parameters = self.m_config_mgr.firstConfig()
     self.m_spiio.initSpiMaster(spi_parameters)
     
@@ -256,8 +280,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
     mfgrname=eepromConfig.mfgr
     chipname=eepromConfig.chip_type
     memsize_MB=eepromConfig.memsize/(1024*1024)
-    self.m_testutil.bufferDisplayInfo("EEPROM Type: "+ mfgrname + " "+ chipname, True )
-    self.m_testutil.bufferDisplayInfo("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V", True)
+    self.m_testutil.bufferDetailInfo("EEPROM Type: "+ mfgrname + " "+ chipname, True )
+    self.m_testutil.bufferDetailInfo("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V", True)
 
     if mfgrname=='Micron':
       micronstatus=self.m_eepromAPI.readMicronStatusRegisters()
@@ -267,7 +291,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       dual_status=not self.m_eepromAPI.dualStatus()
       quad_status=not self.m_eepromAPI.quadStatus()
     
-      self.m_testutil.bufferDisplayInfo("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
+      self.m_testutil.bufferDetailInfo("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
     
     page_address=spi_parameters.address_base+0x1000
     
@@ -276,70 +300,154 @@ class promiraSpiTestApp(usertest.SwUserTest):
     it will never be flushed.
     '''
     self.m_testutil.protectTraceBuffer()
+    #self.m_testutil.traceEchoOn()
+    
+    read_commands_header=['flag', 'spi_cmd', 'description', 'pass_count','fail_count' ]      
+    rdcmds_passndx=3
+    rdcmds_failndx=4
+    read_commands=[[read_hispeed_data, protocol.HSREAD, "High Speed Read", 0, 0],
+                   [read_single_data, protocol.READ, "Read", 0, 0],
+                   [read_dual_data, protocol.SDOREAD, "Dual Output Read", 0, 0]]
+
     while True:
       for spi_parameters in self.m_config_mgr.m_spi_config_list:
-        self.m_testutil.traceEchoOff()
-        self.m_testutil.flushTraceBuffer()
-        self.m_testutil.detailTraceOn()
-        self.m_testutil.displayTraceOn()   
-  
-        self.m_testutil.bufferDetailInfo(repr(spi_parameters))
-        
-        self.m_spiio.initSpiMaster(spi_parameters)
-  
-  
-  
+        retries=2
+        complete=False
+        while not complete:        
+          try:
+
+            self.m_testutil.traceEchoOff()
+            self.m_testutil.flushTraceBuffer()
+            self.m_testutil.detailTraceOn()
+            self.m_testutil.displayTraceOn()   
+      
+            self.m_testutil.bufferDetailInfo(repr(spi_parameters))
+            
+            self.m_spiio.initSpiMaster(spi_parameters)
+      
+      
+      
+                  
+            '''
+            check to see that power is appropriate for the target
+            the variable voltage supplies the eeprom, which
+            can have a voltage range of 3.3v only, or 1.6 to 1.8V
+            '''
+            fixed=spi_parameters.tgt_v1_fixed
+            var=spi_parameters.tgt_v2_variable
+      
+            if not self.voltageOK(var, fixed, eepromConfig.vdd):
+              self.m_testutil.bufferTraceInfo("CONFIGURATION SKIPPED/NOT TESTED", True)
+              continue
+            
+            self.m_testutil.traceEchoOff()
+      
+            if write_data and (not eeprom_unlocked):
+              eeprom_unlocked=self.m_eepromAPI.unlockDevice()
               
-        '''
-        check to see that power is appropriate for the target
-        the variable voltage supplies the eeprom, which
-        can have a voltage range of 3.3v only, or 1.6 to 1.8V
-        '''
-        fixed=spi_parameters.tgt_v1_fixed
-        var=spi_parameters.tgt_v2_variable
-  
-        if not self.voltageOK(var, fixed, eepromConfig.vdd):
-          self.m_testutil.bufferTraceInfo("CONFIGURATION SKIPPED/NOT TESTED", True)
-          continue
-        
-        self.m_testutil.traceEchoOff()
-  
-        if write_data and (not eeprom_unlocked):
-          eeprom_unlocked=self.m_eepromAPI.unlockDevice()
-          
-        if write_data:
-          self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, txdata_array)
-  
-        if verbose and first_loop:
-          self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
-  
+            if write_data:
+              self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, txdata_array)
+      
+            #if verbose and first_loop:
+            #  self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
+      
+            
+            test_failed=False
+            subtest_loops=4
+            loop_pass=loop_fail=0
+            
+            for command in read_commands:
+              command[rdcmds_failndx]=command[rdcmds_passndx]=0
+            
+            for command_ndx in range(len(read_commands)):
+              command=read_commands[command_ndx]
               
-        read_commands=[[read_hispeed_data, protocol.HSREAD, "High Speed Read"],
-                       [read_single_data, protocol.READ, "Read"],
-                       [read_dual_data, protocol.SDOREAD, "Dual Output Read"]]
-        
-        test_failed=False
-        subtest_loops=4
-        for command in read_commands:
-        
-          for loop in range(subtest_loops):
-            if command[0]==True:
-              test_failed=not self.readTest(command[1], command[2], page_address, self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
-              if test_failed:
-                self.m_testutil.bufferDetailInfo("subtest iteration #"+str(loop+1)+" of "+str(subtest_loops)+" failed")
+              for loop in range(subtest_loops):
+                if command[0]==True:
+                  test_pass=self.readTest(command[1], command[2], page_address, self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
+    
+                  self.m_histogram.addData(spi_parameters.clk_kHz, test_pass)
+    
+                  if test_pass:
+                    command[rdcmds_passndx]+=1
+                    loop_pass+=1
+                    command[3]+=1
+                    
+                  if not test_pass:
+                    loop_fail+=1
+                    command[4]+=1
+                    
+                    self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
+                    self.m_testutil.bufferDetailInfo("subtest iteration #"+str(loop+1)+" of "+str(subtest_loops)+" failed")
+    
+                    if break_subtest_on_single_read_fail:
+                      self.m_testutil.bufferDetailInfo("break on test fail")
+                      break
+    
+                  #time.sleep(.001)  #10 ms sleep
+      
+              if break_subtest_on_single_read_fail or (break_frequency_test_on_subtest_fail and loop_pass==0):
+                self.m_testutil.bufferDetailInfo("break on all/single fail")
                 break
-              elif loop==(subtest_loops-1):
-                self.m_testutil.bufferDetailInfo("success: subtest (0x%02x) %s" % (command[1], command[2]))
-                
-              time.sleep(.01)  #10 ms sleep
-  
-          if test_failed:
-            break                                                                                 
-  
-        if test_failed:
-          break
-  
-        first_loop=False
+      
+              #time.sleep(.1)
+
+            complete=True
+            #first_loop=False
+            if break_trial_on_nopass_frequency and loop_pass==0:
+              self.m_testutil.bufferDetailInfo("break on all/single fail")
+              break
+
+            
+
+          except self.m_spiio.PromiraError as e:
+            print(e)
+            self.m_testutil.dumpTraceBuffer()
+            self.m_spiio.devResetOpen()
+            retries-=1
+            complete= retries == 0
+
+              
+            
+      total_pass=0
+      total_fail=0
+      
+      for command in read_commands:
+        command_result=" %04d/%04d Pass/Fail %s" %( command[3], command[4], command[2])
+        total_pass+=command[3]
+        total_fail+=command[4]
         
-  
-      self.m_testutil.bufferDisplayInfo("Configuration Looptest Complete!", True)
+      run_result="Total Pass Reads = %d     Total Fail Reads = %d" % (total_pass, total_fail)
+      
+      self.m_testutil.bufferDetailInfo(run_result)  
+      self.m_testutil.bufferDetailInfo("Configuration Looptest Complete!")
+      
+      self.m_histogram.dumpHistogram()
+
+      if use_auto_vernier and auto_vernier_cycle>auto_vernier_cycle_count:
+        auto_vernier_cycle_count+=1
+        if auto_vernier_cycle==auto_vernier_cycle_count:
+          vernier_bucket_values, vernier_bucket_labels=self.m_histogram.refine_buckets()
+          if vernier_bucket_values != None:
+            self.m_testutil.bufferDisplayInfo("Restarting TestRun / Resetting Bucket Definitions")
+            self.m_histogram=result2DHistogram(vernier_bucket_values,
+                                               vernier_bucket_labels,
+                                               parameter_units_label,
+                                               data_values,
+                                               data_labels)
+            '''
+            New Frequency Vernier is determined
+            Update the default configuration for frequency vernier
+            Regenerate the Spi Parameters Configuration Sets List
+            ...continue testing
+            '''
+            configVal=spicfg.configVal()
+            configVal.updateClkKhzList(vernier_bucket_values)
+            self.m_config_mgr.genConfigs()
+          
+          else:
+            # retry in cycle counts, try again much later
+            auto_vernier_cycle_count=0
+          
+          
+          

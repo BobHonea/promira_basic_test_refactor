@@ -39,12 +39,27 @@ class spiIO:
   m_queue           = None
   m_channel_handle  = None
   m_app_conn_handle = None
-  m_pm              = None
+  m_app_selection   = None
+  m_psp_handle              = None
   m_app_name        = "com.totalphase.promact_is"
   m_promira_open    = None
   m_device_ipstring = None
   _instance         = None
   
+  
+  '''
+  Custom Exception for Promira Serial Platform Errors
+  '''  
+  class PromiraError(Exception): 
+    
+      # Constructor or Initializer 
+      def __init__(self, value): 
+          self.value = value 
+    
+      # __str__ is to print() the value 
+      def __str__(self): 
+          return(repr(self.value)) 
+      
   
   def __new__(cls):
     if cls._instance is None:
@@ -67,10 +82,8 @@ class spiIO:
         cls.discoverDevice(cls)
         cls.m_spi_initialized = False
         return cls._instance
-    
 
-  
-  
+    
   def selectSpiConfig(self, index=0):
     pass
 
@@ -137,9 +150,10 @@ class spiIO:
     pmact.ps_queue_spi_oe(signal_queue, 0x00)
 
         
-    status_collect, _dc = pmact.ps_queue_submit(signal_queue, self.m_channel_handle, 0)
+    status_collect, _dc = pmact.ps_queue_submit(signal_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)
     self.m_in_signal_event=True
     collect_length, collect_buf, _fatal_error = self.procDevCollect(status_collect)
+    pmact.ps_queue_destroy(signal_queue)
     self.m_in_signal_event=False
     
 
@@ -159,7 +173,14 @@ class spiIO:
       self.devOpen(self.m_device_ipString)
       self.m_promira_open=True
       
-    pmact.ps_app_configure(self.m_channel_handle, pmact.PS_APP_CONFIG_SPI)
+    self.m_app_selection = pmact.ps_app_configure(self.m_channel_handle, pmact.PS_APP_CONFIG_SPI)
+    
+    self.m_testutil.bufferDetailInfo("Promira channel_handle = %d" % self.m_channel_handle)
+        
+    if (self.m_app_selection != pmact.PS_APP_CONFIG_SPI):
+      self.m_testutil.bufferDisplayInfo("promira app selection fail: should be=%d   was=%d" % 
+                                        (pmact.PS_APP_CONFIG_SPI, self.m_app_selection))
+      raise self.PromiraError("Promira App configuration Fault")
     
     # Power the target device with none, one or two power sources
     self.setTargetpower(self.m_spi_tgt_v1_fixed, self.m_spi_tgt_v2_var)
@@ -174,6 +195,8 @@ class spiIO:
     
     self.m_spi_initialized=True
     
+
+ 
     return
   
   '''
@@ -236,13 +259,13 @@ class spiIO:
   
   
   def devOpen (self, ip):
-      self.m_pm = pm.pm_open(ip)
-      if self.m_pm <= 0:
+      self.m_psp_handle = pm.pm_open(ip)
+      if self.m_psp_handle <= 0:
           print("Unable to open Promira platform on %s" % ip)
-          print("Error code = %d" % self.m_pm)
+          print("Error code = %d" % self.m_psp_handle)
           sys.exit()
   
-      ret = pm.pm_load(self.m_pm, self.m_app_name)
+      ret = pm.pm_load(self.m_psp_handle, self.m_app_name)
       if ret < 0:
           print("Unable to load the application(%s)" % self.m_app_name)
           print("Error code = %d" % ret)
@@ -260,7 +283,7 @@ class spiIO:
           print("Error code = %d" % self.m_channel_handle)
           sys.exit()
   
-      return self.m_pm, self.m_app_conn_handle, self.m_channel_handle
+      return self.m_psp_handle, self.m_app_conn_handle, self.m_channel_handle
   
   
   '''
@@ -272,10 +295,14 @@ class spiIO:
   '''
      
   def devClose (self):
-      self.m_pm.ps_channel_close(self.m_channel_handle)
-      self.m_pm.ps_app_disconnect(self.m_app_conn_handle)
-      self.m_pm.pm_close(self.m_pm)
+      pmact.ps_channel_close(self.m_channel_handle)
+      pmact.ps_app_disconnect(self.m_app_conn_handle)
+      pm.pm_close(self.m_psp_handle)
 
+  def devResetOpen(self):
+    self.devClose()
+    self.devOpen(self.m_device_ipString)
+    
   def closeSpiMaster(self):
     self.devClose()
 
@@ -300,7 +327,7 @@ class spiIO:
       
     '''
     while True:
-        t, _length, result = pmact.ps_collect_resp(collect, 100000)
+        t, _length, result = pmact.ps_collect_resp(collect, 1000)
 
         if self.debug_devCollect:
           #****DEBUG****
@@ -340,8 +367,8 @@ class spiIO:
     
     if fatal_error:
       #self.signalEvent()
-      self.m_testutil.fatalError("Error In DevCollect")
-      
+      #self.m_testutil.fatalError("Error In DevCollect")
+      raise self.PromiraError("Error In DevCollect")
     return _ret, buf
   
 
@@ -402,8 +429,12 @@ class spiIO:
     def submitQueue(queue_handle, channel_handle, ctrlID):
       self.m_testutil.bufferDetailInfo(" queue_handle %d ; channel_handle %d ; ctrlID %d" 
                                         % (queue_handle, channel_handle, ctrlID))
-      status_collect, dc = pmact.ps_queue_submit(queue_handle, channel_handle, ctrlID)
-      return status_collect, dc
+      collect, _dc = pmact.ps_queue_submit(queue_handle, channel_handle, ctrlID)
+      if collect < 0:
+        errmsg="SubmitQueue Error %d: %s" % (collect, self.m_pm_msg.apiIfError(collect))
+        raise self.PromiraError(errmsg)
+
+      return collect
 
 
       
@@ -466,10 +497,10 @@ class spiIO:
       
       while slave_busy:
         if first_pass:
-          status_collect, _dc = submitQueue(start_queue, self.m_channel_handle, 0)
+          status_collect = submitQueue(start_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)
           collect_length, collect_buf = self.devCollect(status_collect)
         else:
-          status_collect, _dc = submitQueue(continue_queue, self.m_channel_handle, 0)
+          status_collect = submitQueue(continue_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)
           collect_length, collect_buf = self.devCollect(status_collect)
           
         status=collect_buf[0]
@@ -527,7 +558,7 @@ class spiIO:
         pmact.ps_queue_spi_ss(session_queue, 0)
         pmact.ps_queue_spi_oe(session_queue, 0)        
 
-        collect_handle, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
+        collect_handle = submitQueue(session_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)
         if collect_handle==None:
           self.m_testutil.fatalError("NoneType collected")
 
@@ -565,7 +596,7 @@ class spiIO:
       if spi_session.endOfSession():
         pmact.ps_queue_spi_ss(session_queue, 0)
         pmact.ps_queue_spi_oe(session_queue, 0)        
-        collect, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
+        collect = submitQueue(session_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)
         collect_length, collect_buf = self.devCollect(collect)
         pmact.ps_queue_destroy(session_queue)
         return self.SpiResult(True, collect_length, _dc)
@@ -648,7 +679,8 @@ class spiIO:
         pmact.ps_queue_spi_oe(session_queue, 0)
         #pmact.ps_queue_delay_ms(session_queue, 1)
           
-        collect, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
+        collect = submitQueue(session_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)
+        self.m_testutil.bufferDetailInfo("Write collect handle = %d" % collect)
         _in_length, _in_buf = self.devCollect(collect)
         pmact.ps_queue_destroy(session_queue)
         
@@ -667,8 +699,10 @@ class spiIO:
         pmact.ps_queue_spi_oe(session_queue, 0)
         
         
-        collect, _dc = submitQueue(session_queue, self.m_channel_handle, 0)
-        
+        collect = submitQueue(session_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)        
+        self.m_testutil.bufferDetailInfo("Read collect handle = %d" % collect)
+        if collect < 0:
+          self.m_testutil.fatalError("Failed Read Queue Submission: collect handle = %d" % collect)
 
           
         collect_length, collect_buf = self.devCollect(collect)

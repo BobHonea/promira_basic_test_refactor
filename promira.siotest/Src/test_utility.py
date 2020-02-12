@@ -6,7 +6,24 @@ import array
 import math
 from _random import Random
 
+# A python program to create user-defined exception 
+  
+# class MyError is derived from super class Exception 
+class TestError(Exception): 
+  
+    # Constructor or Initializer 
+    def __init__(self, value): 
+        self.value = value 
+  
+    # __str__ is to print() the value 
+    def __str__(self): 
+        return(repr(self.value)) 
+  
 
+  
+
+  
+  
 
 
 class testUtil:
@@ -240,7 +257,7 @@ class testUtil:
       for dump_index in range(dump_index, dump_index + line_bytes):
         value = data_array[dump_index]
         linestring = linestring + " %02X" % value
-      self.bufferDisplayInfo(linestring)
+      self.bufferDetailInfo(linestring)
  
  
  
@@ -279,7 +296,7 @@ class testUtil:
             diff_text[index]=">%02x"%reference
           last_index=index
           
-        self.bufferDisplayInfo('      '+''.join(diff_text))
+        self.bufferDetailInfo('      '+''.join(diff_text))
         return False
       
       else:
@@ -287,7 +304,7 @@ class testUtil:
     
     
     if not type(data_array)==array.ArrayType or len(data_array)==0:
-      self.bufferDisplayInfo("Hexdump:  array is empty")
+      self.bufferDetailInfo("Hexdump:  array is empty")
       return
     
     bytes_per_line = 32
@@ -295,7 +312,7 @@ class testUtil:
     array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
     dump_bytes = array_size
     dump_index = 0
-    self.bufferDisplayInfo("%s [ 0x%x bytes ]" % (label, array_size))
+    self.bufferDetailInfo("%s [ 0x%x bytes ]" % (label, array_size))
     
     for line in range(array_lines):
       line_start = line * bytes_per_line
@@ -311,13 +328,13 @@ class testUtil:
       pattern_match=self.arraysMatch(data_sub_array, pattern_sub_array)
 
       if not pattern_match:
-        self.bufferDisplayInfo("")
+        self.bufferDetailInfo("")
         
       for dump_index in range(dump_index, dump_index + line_bytes):
         value = data_array[dump_index]
         line_string = line_string + " %02X" % value
       
-      self.bufferDisplayInfo(line_string)
+      self.bufferDetailInfo(line_string)
       if not pattern_match:
         printDiffLine(data_array[line_start:line_end], pattern_array[line_start:line_end])
         

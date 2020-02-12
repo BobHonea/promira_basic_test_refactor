@@ -72,12 +72,37 @@ class configVal:
     clk_mode        = [SPICLOCKMODE_0], #,SPICLOCKMODE_3],
     bit_order       = [SPIBITORDER_MSB],
     ss_polarity     = [SPI_SS_ALL_ACTIVE_LOW],
-    clk_kHz         = [ 1000, 3000, 15000, 17500, 20000, 25000, 27000 , 29000, 30000, 31000, 32000, 40000, 45000, 50000, 55000, 60000, 61000, 62000, 65000],
+    clk_kHz         = [ 1000, 3000, 15000, 17500, 20000, 25000, 27000 , 29000, 30000, 31000, 32000, 33000, 34000, 35000, 36000, 37000, 38000, 39000, 40000, 45000, 50000, 55000, 60000, 61000, 62000, 65000],
     address_base    = [0],   # [0, ... ,0x10000],
     tgt_v1_fixed    = [None], #, [3.3, 5.0],
-    tgt_v2_variable = [1.6],#[1.6, 1.8, 3.3 ],
+    tgt_v2_variable = [1.7],#[1.6, 1.8, 3.3 ],
     eeprom_config   = [eeprom_devices.gdmcc32MB1V8])
   #, eeprom.eeprom.gdmcc8MB3V3])
+  
+  _instance = None
+
+  def __new__(cls):
+      if cls._instance is None:
+          print('Creating the SpiIO object')
+          cls._instance = super(configVal, cls).__new__(cls)        
+
+      return cls._instance
+  
+  def getSpiConfigOptions(self):
+    # -> spiConfiguration
+    return self.spi_config_options
+
+  def updateClkKhzList(self, clk_kHz_List):
+    self.spi_config_options=self.spiConfiguration(
+                        clk_mode        = self.spi_config_options.clk_mode,
+                        bit_order       = self.spi_config_options.bit_order,
+                        ss_polarity     = self.spi_config_options.ss_polarity,
+                        clk_kHz         = clk_kHz_List,
+                        address_base    = self.spi_config_options.address_base,
+                        tgt_v1_fixed    = self.spi_config_options.tgt_v1_fixed,
+                        tgt_v2_variable = self.spi_config_options.tgt_v2_variable,
+                        eeprom_config   = self.spi_config_options.eeprom_config )
+  
   pass
 
   
@@ -151,7 +176,10 @@ class configMgr:
   
   def configsGenerated(self):
     return self.m_spi_config_list!=None
+  
 
+    self.genConfigs()
+    
   '''
   genConfigs()
       ACTIVITY:  creates list of configuration tuples
