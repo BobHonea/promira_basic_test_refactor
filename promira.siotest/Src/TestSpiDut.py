@@ -64,7 +64,7 @@ import test_utility as testutil
 import promactive_msg as pmmsg 
 import time
 from cmd_protocol import RVCFG
-from vernier_histogram import result2DHistogram
+from result_histogram import result2DHistogram
 
 
 
@@ -248,8 +248,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
 
     self.m_testutil.initTraceBuffer(200)
-    self.m_testutil.detailTraceOff()
-    self.m_testutil.displayTraceOn()
+    #self.m_testutil.detailEchoOn()
+  
     
     #self.m_spiio.signalEvent()
     #self.m_testutil.fatalError("just because")
@@ -300,7 +300,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     it will never be flushed.
     '''
     self.m_testutil.protectTraceBuffer()
-    #self.m_testutil.traceEchoOn()
+    self.m_testutil.traceEchoOn()
     
     read_commands_header=['flag', 'spi_cmd', 'description', 'pass_count','fail_count' ]      
     rdcmds_passndx=3
@@ -324,6 +324,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
             self.m_testutil.bufferDetailInfo(repr(spi_parameters))
             
             self.m_spiio.initSpiMaster(spi_parameters)
+            time.sleep(.01)
+            clock_kHz=spi_parameters.clk_kHz
       
       
       
@@ -335,6 +337,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
             '''
             fixed=spi_parameters.tgt_v1_fixed
             var=spi_parameters.tgt_v2_variable
+  
       
             if not self.voltageOK(var, fixed, eepromConfig.vdd):
               self.m_testutil.bufferTraceInfo("CONFIGURATION SKIPPED/NOT TESTED", True)
@@ -371,11 +374,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
                   if test_pass:
                     command[rdcmds_passndx]+=1
                     loop_pass+=1
-                    command[3]+=1
                     
                   if not test_pass:
                     loop_fail+=1
-                    command[4]+=1
+                    command[rdcmds_failndx]+=1
                     
                     self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
                     self.m_testutil.bufferDetailInfo("subtest iteration #"+str(loop+1)+" of "+str(subtest_loops)+" failed")
@@ -414,8 +416,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
       
       for command in read_commands:
         command_result=" %04d/%04d Pass/Fail %s" %( command[3], command[4], command[2])
-        total_pass+=command[3]
-        total_fail+=command[4]
+        total_pass+=command[rdcmds_passndx]
+        total_fail+=command[rdcmds_failndx]
         
       run_result="Total Pass Reads = %d     Total Fail Reads = %d" % (total_pass, total_fail)
       
@@ -427,7 +429,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
       if use_auto_vernier and auto_vernier_cycle>auto_vernier_cycle_count:
         auto_vernier_cycle_count+=1
         if auto_vernier_cycle==auto_vernier_cycle_count:
-          vernier_bucket_values, vernier_bucket_labels=self.m_histogram.refine_buckets()
+          min_kHz_vernier_value=25000
+          vernier_bucket_values, vernier_bucket_labels=self.m_histogram.refine_buckets(min_kHz_vernier_value)
           if vernier_bucket_values != None:
             self.m_testutil.bufferDisplayInfo("Restarting TestRun / Resetting Bucket Definitions")
             self.m_histogram=result2DHistogram(vernier_bucket_values,
@@ -443,7 +446,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
             '''
             configVal=spicfg.configVal()
             configVal.updateClkKhzList(vernier_bucket_values)
-            self.m_config_mgr.genConfigs()
+            self.m_config_mgr.genConfigs(True)
           
           else:
             # retry in cycle counts, try again much later

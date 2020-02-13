@@ -244,10 +244,11 @@ class spiIO:
       if variable_voltage != None: 
         pmact.ps_phy_level_shift(self.m_channel_handle, variable_voltage)
         pmact.ps_phy_target_power(self.m_channel_handle, pmact.PS_PHY_TARGET_POWER_TARGET2)
+        self.m_testutil.bufferDetailInfo("%fV @ Promira Variable Voltage" % vtgt2_variable_setting)
         
       if fixed_code != None:
         pmact.ps_phy_target_power(self.m_channel_handle, fixed_code)
-        
+        self.m_testutil.bufferDetailInfo("%fV @ Promira VTGT 1&2" % vtgt1_setting)
       
       if fixed_code!=None and variable_voltage!=None:
         pmact.ps_phy_target_power(self.m_channel_handle, pmact.PS_PHY_TARGET_POWER_BOTH)

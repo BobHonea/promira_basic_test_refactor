@@ -123,12 +123,14 @@ class configMgr:
         Count of valid configurations
   '''
   _instance=None
+  m_config_val = None
   
   def __new__(cls):
       if cls._instance is None:
           print('Creating the configMgr object')
           cls._instance = super(configMgr, cls).__new__(cls)
           #cls._instance = object.__new__(cls)
+          cls.m_config_val=configVal()
           cls._instance.__singleton_init__()
       return cls._instance
   
@@ -185,7 +187,7 @@ class configMgr:
       ACTIVITY:  creates list of configuration tuples
       RETURN:    the count of tuples
   '''
-  def genConfigs(self):
+  def genConfigs(self, regen=False):
     
     def fill_config_level(attrib_index):
       '''
@@ -205,13 +207,13 @@ class configMgr:
         
       elif attrib_index==max_config_ndx:
         # spi_config is defined, store it
-        self.m_spi_config_list.append(configVal.spiConfiguration._make(self.config_item_list))
+        self.m_spi_config_list.append(self.m_config_val.spiConfiguration._make(self.config_item_list))
         
       else:
         '''
         Modest Subtlety follows....
         '''
-        config_items=getattr(configVal.spi_config_options, configVal.spiConfiguration._fields[attrib_index])
+        config_items=getattr(self.m_config_val.spi_config_options, self.m_config_val.spiConfiguration._fields[attrib_index])
         config_item_count=len(config_items)
         for item_index in range(config_item_count):
           this_value=config_items[item_index]
@@ -223,11 +225,11 @@ class configMgr:
           self.config_item_list=self.config_item_list[:-1]
 
     
-    if not self.configsGenerated():
+    if regen or not self.configsGenerated():
       # PREVENT repeated initialization
       # It is possible to generate ZERO configurations (however unlikely)    
       self.m_spi_config_list=[]
-      max_config_ndx=len(configVal.spiConfiguration._fields)
+      max_config_ndx=len(self.m_config_val.spiConfiguration._fields)
       fill_config_level(-1)
 
     return len(self.m_spi_config_list) > 0

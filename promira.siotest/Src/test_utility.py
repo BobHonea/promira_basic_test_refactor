@@ -138,6 +138,12 @@ class testUtil:
 
   def traceEchoOff(self):
     self.m_trace_echo=False
+    
+  def detailEchoOn(self):
+    self.m_detail_echo=True
+    
+  def detailEchoOff(self):
+    self.m_detail_echo=False
 
   def dumpTraceBuffer(self):
     if self.m_trace_enabled:
