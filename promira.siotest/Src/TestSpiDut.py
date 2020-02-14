@@ -380,7 +380,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       sub_battery_tests_per_battery   = 3,
       battery_tests_per_configuration = 3,
       sufficient_command_tests_per_trial = 50000,
-      use_auto_vernier                = True,
+      use_auto_vernier                = False,
       default_vernier_soak_cycles     = 10  )
 
 
@@ -400,8 +400,6 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
     eeprom_unlocked=False
 
-    use_auto_vernier=True
-    auto_vernier_cycle=5
     auto_vernier_cycle_count=0
 
     
@@ -620,9 +618,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
       
       self.m_histogram.dumpHistogram()
 
-      if use_auto_vernier and auto_vernier_cycle>auto_vernier_cycle_count:
+      if control.use_auto_vernier and auto_vernier_cycle_count>control.auto_vernier_soak_cycles:
         auto_vernier_cycle_count+=1
-        if auto_vernier_cycle==auto_vernier_cycle_count:
+        if control.auto_vernier_soak_cycles==auto_vernier_cycle_count:
           min_kHz_vernier_value=25000
           vernier_bucket_values, vernier_bucket_labels=self.m_histogram.refine_buckets(min_kHz_vernier_value)
           if vernier_bucket_values != None:
