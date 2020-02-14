@@ -63,8 +63,11 @@ import spi_cfg_mgr as spicfg
 import test_utility as testutil
 import promactive_msg as pmmsg 
 import time
+import collections as coll
 from cmd_protocol import RVCFG
 from result_histogram import result2DHistogram
+
+
 
 
 
@@ -202,10 +205,187 @@ class promiraSpiTestApp(usertest.SwUserTest):
           
         return False
     return True
+
+
+
+  '''
+  A Configuration Set test includes a test of a battery of reads command trials
+  A battery of read command trials includes
+    1. multiple trials of a single type of read commands
+    2. (presently) 3 different types of read command
+         (single, high-speed single, dual)
+
+  Failure can be interpreted as:
+    1. failure of a sub-battery: data-read-command type
+    2. failure of battery:       all data-read-command types
+    3. falure of a trial:        all configurations
+
+  Failure Criteria can be:
+    1. SEVERE:        any read command test within a subtest/battery fails
+    2. STRICT:        most commands of a subtest/battery fail
+    3. GENERAL:       all tests of a subtest/battery fail
+    
+  When Failure can be judged:
+    1. SEVERE:        as soon as ANY test-level
+    2. STRICT:        as soon as a majority of tests in a level complete
+    3. GENERAL:       as soon as all tests in a level complete
   
+'''
+  
+  
+  '''
+  AUTO VERNIER
+  
+  After a soak-in period, the initial results of testing can be assessed 
+  against clock_kHz frequencies. The set of tested frequencies can be recast
+  to eliminate most contiguous failure free low-frequency trials, and most
+  100% failed high-frequency trials.
+  
+  The benefits of Auto Vernier are:
+    1.  Exclusion of tests that historically DO NOT FAIL.
+    2.  Exclusion of tests that historically DO NOT SUCCEED.
+    3.  Retention of a bracketing set of ALWAYS-FAIL and ALWAYS SUCCEED tests.
+    4.  FASTER EXECUTION of meaningful subset of Trial.
+    5.  Finer granularity of meaningful trial clock frequencies.
+    
+  The risks of Auto Vernier are:
+    1.  Device performance drifts with time/heat/etc
+    2.  FAILED/SUCESSFUL frequency ranges change with trial count or temperature
+    3.  Changed Results are not viewed due to exclusion from test focus
+    
+  '''
+
+  CRITERIA_SEVERE=0
+  CRITERIA_STRICT=1
+  CRITERIA_GENERAL=3
+  CRITERIA_LIBERAL=4
+  
+  #CRITERIA_LIBERAL=4
+  
+  BREAKTYPE_NONE=0
+  BREAKTYPE_SUB_BATTERY=1
+  BREAKTYPE_BATTERY=2
+  BREAKTYPE_CONFIGURATION=4
+  BREAKTYPE_TRIAL=8
+
+  ReadTestControl=coll.namedtuple('ReadTestControl', 
+                       'read_single_iowidth'
+                      ' read_hispeed_single_iowidth'
+                      ' read_dual_iowidth'
+                      ' severe strict general liberal'
+                      ' configuration_passfail_criteria'
+                      ' battery_passfail_criteria'
+                      ' sub_battery_passfail_criteria '
+                      ' break_none '
+                      ' break_sub_battery'
+                      ' break_battery'
+                      ' break_configuration'
+                      ' break_trial'
+                      ' break_on_read_fail'
+                      ' break_on_sub_battery_fail'
+                      ' break_on_battery_fail'
+                      ' break_on_configuration_fail'
+                      ' break_on_config_set_fail'
+                      ' sub_battery_tests_per_battery'
+                      ' battery_tests_per_configuration'
+                      ' sufficient_command_tests_per_trial'
+                      ' use_auto_vernier'
+                      ' default_vernier_soak_cycles')
+  
+  SubtestControl=coll.namedtuple('SubtestControl', 'test_selected test_name command_code test_monitor')
+  
+  class testMonitor(object):
+    def __init__(self, criteria, maximum_trials):
+      if  (criteria in [promiraSpiTestApp.CRITERIA_GENERAL, promiraSpiTestApp.CRITERIA_STRICT,
+                        promiraSpiTestApp.CRITERIA_SEVERE]
+          and maximum_trials>0 ):
+        self.m_criteria=criteria
+        self.m_maximum_trials=maximum_trials
+        self.m_results=[]
+      else:
+        self.m_testutil.fatalError("testMonitor intiialization")
+    
+    def reset(self):
+      self.m_results=[]
+        
+    def enterResult(self, pass_fail):
+      self.m_results.append(pass_fail)
+      
+    def passCount(self):
+      return(self.m_results.count(True))
+    
+    def failCount(self):
+      return(self.m_results.count(False))
+    
+    def resultCount(self):
+      return(len(self.m_results))
+    
+    def maxTrials(self):
+      return self.m_maximum_trials
+    
+    def testComplete(self):
+      return len(self.m_results) == self.m_maximum_trials
+    
+    def passCriteriaMet(self):
+      if self.m_criteria == promiraSpiTestApp.CRITERIA_STRICT:
+        if self.resultCount() > (self.m_maximum_trials+1)/2:
+          proportion=float(self.failCount())/self.resultCount()
+          return (proportion > 0.5)
+    
+      elif self.m_criteria == self.criteria_SEVERE:
+        return self.resultCount() > 0 and self.failCount() == 0
+        
+      elif self.m_criteria == promiraSpiTestApp.CRITERIA_GENERAL:
+        if self.resultCount() == self.m_maximum_trials: 
+          return self.failCount() < self.resultCount()
+        
+      return False
+    
+    def failCriteriaMet(self):
+      if self.m_criteria == promiraSpiTestApp.CRITERIA_STRICT:
+        return self.failCount() > int(self.m_maximum_trials+1)/2
+      
+      elif self.m_criteria == promiraSpiTestApp.CRITERIA_GENERAL:
+        if self.resultCount() == self.m_maximum_trials:
+          return self.failCount() == self.resultCount()
+         
+      elif self.m_criteria == promiraSpiTestApp.CRITERIA_SEVERE:
+          return self.failCount() > 0
+        
+      return False
+    
   def runTest(self):
 
+    control=self.ReadTestControl(
+      read_single_iowidth             = True,
+      read_hispeed_single_iowidth     = True,
+      read_dual_iowidth               = True,
+      severe                          = self.CRITERIA_SEVERE,
+      strict                          = self.CRITERIA_STRICT,
+      general                         = self.CRITERIA_GENERAL,
+      liberal                         = self.CRITERIA_LIBERAL,
+      configuration_passfail_criteria = self.CRITERIA_GENERAL,
+      battery_passfail_criteria       = self.CRITERIA_STRICT,
+      sub_battery_passfail_criteria   = self.CRITERIA_STRICT,
+      break_none                      = self.BREAKTYPE_NONE,
+      break_sub_battery               = self.BREAKTYPE_SUB_BATTERY,
+      break_battery                   = self.BREAKTYPE_BATTERY,
+      break_configuration             = self.BREAKTYPE_CONFIGURATION,
+      break_trial                     = self.BREAKTYPE_TRIAL,
+      break_on_read_fail              = [self.BREAKTYPE_NONE],
+      break_on_sub_battery_fail       = [self.BREAKTYPE_NONE],
+      break_on_battery_fail           = [self.BREAKTYPE_NONE],
+      break_on_configuration_fail     = [self.BREAKTYPE_NONE],
+      break_on_config_set_fail        = [self.BREAKTYPE_NONE],
+      sub_battery_tests_per_battery   = 3,
+      battery_tests_per_configuration = 3,
+      sufficient_command_tests_per_trial = 50000,
+      use_auto_vernier                = True,
+      default_vernier_soak_cycles     = 10  )
 
+
+    
+     
     txdata_array = self.m_testutil.firstReferencePageArray()
     _txdata_count = len(txdata_array)
     
@@ -216,28 +396,21 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
     verbose=True
     write_data = False
-    read_single_data=True
-    read_dual_data=True
-    read_hispeed_data=True
+  
+    
     eeprom_unlocked=False
-    break_subtest_on_single_read_fail=False
-    break_frequency_test_on_subtest_fail=True
-    break_trial_on_nopass_frequency=True
+
     use_auto_vernier=True
     auto_vernier_cycle=5
     auto_vernier_cycle_count=0
 
-    sector_read_count=0
-    #first_loop=True
-    subtest_loops=10
     
     configOptions=self.m_configVal.getSpiConfigOptions()
     parameter_values  = configOptions.clk_kHz
     parameter_labels  = [ ("%02.3f" % (float(frequency)/1000)) for frequency in configOptions.clk_kHz ]
     parameter_units_label = "MHz"
     data_values       = [ True, False ]
-    data_labels       = [ 'Pass', 'Fail'
-                         ]
+    data_labels       = [ 'Pass', 'Fail']
     self.m_histogram=result2DHistogram( parameter_values, parameter_labels, 
                                         parameter_units_label, 
                                         data_values, data_labels)
@@ -301,16 +474,43 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     self.m_testutil.protectTraceBuffer()
     self.m_testutil.traceEchoOn()
+  
+  
+  
+  
     
-    read_commands_header=['flag', 'spi_cmd', 'description', 'pass_count','fail_count' ]      
-    rdcmds_passndx=3
-    rdcmds_failndx=4
-    read_commands=[[read_hispeed_data, protocol.HSREAD, "High Speed Read", 0, 0],
-                   [read_single_data, protocol.READ, "Read", 0, 0],
-                   [read_dual_data, protocol.SDOREAD, "Dual Output Read", 0, 0]]
+    
+    battery_commands = [
+      self.SubtestControl(test_selected=control.read_hispeed_single_iowidth,
+                          command_code=protocol.HSREAD, test_name="Highspeed Read",
+                          test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
+                                                        control.sub_battery_tests_per_battery)),
+      self.SubtestControl(test_selected=control.read_single_iowidth,
+                          command_code=protocol.READ, test_name="Read", 
+                          test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
+                                                        control.sub_battery_tests_per_battery)),
+      self.SubtestControl(test_selected=control.read_dual_iowidth,
+                          command_code=protocol.SDOREAD, test_name="Dual Output Read", 
+                          test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
+                                                        control.sub_battery_tests_per_battery))]
+      
 
-    while True:
+
+    trial_monitor=self.testMonitor(self.CRITERIA_GENERAL, control.sufficient_command_tests_per_trial)
+    
+    while not trial_monitor.testComplete():
+      '''
+      Test all configurations
+      '''
+  
+
+      
+      config_set_monitor=self.testMonitor(self.CRITERIA_GENERAL, len(self.m_config_mgr.m_spi_config_list))
       for spi_parameters in self.m_config_mgr.m_spi_config_list:
+        '''
+        Test one configuration
+        '''
+        
         retries=2
         complete=False
         while not complete:        
@@ -354,51 +554,54 @@ class promiraSpiTestApp(usertest.SwUserTest):
             #if verbose and first_loop:
             #  self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
       
-            
-            test_failed=False
-            subtest_loops=4
-            loop_pass=loop_fail=0
-            
-            for command in read_commands:
-              command[rdcmds_failndx]=command[rdcmds_passndx]=0
-            
-            for command_ndx in range(len(read_commands)):
-              command=read_commands[command_ndx]
+                        
+            '''
+            Test Battery of Read Commands @ Configuration
+            '''
+            test_battery_monitor=self.testMonitor(control.battery_passfail_criteria, control.battery_tests_per_configuration)
+            while not test_battery_monitor.testComplete():
               
-              for loop in range(subtest_loops):
-                if command[0]==True:
-                  test_pass=self.readTest(command[1], command[2], page_address, self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
-    
-                  self.m_histogram.addData(spi_parameters.clk_kHz, test_pass)
-    
-                  if test_pass:
-                    command[rdcmds_passndx]+=1
-                    loop_pass+=1
+              for sub_battery in battery_commands:
+                subtest_command=sub_battery.command_code
+                subtest_monitor=sub_battery.test_monitor
+                subtest_monitor.reset()
+                subtest_name=sub_battery.test_name
+                '''
+                Test Sub-Battery of Read Commands
+                '''
+                
+                while not subtest_monitor.testComplete():
+                  if sub_battery.test_selected==True:
+                    test_pass=self.readTest(subtest_command, subtest_name, page_address,
+                                             self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
                     
-                  if not test_pass:
-                    loop_fail+=1
-                    command[rdcmds_failndx]+=1
+                    subtest_monitor.enterResult(test_pass)
+                    self.m_histogram.addData(spi_parameters.clk_kHz, test_pass)
                     
                     self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
-                    self.m_testutil.bufferDetailInfo("subtest iteration #"+str(loop+1)+" of "+str(subtest_loops)+" failed")
+                    self.m_testutil.bufferDetailInfo("subtest iteration #"+str(subtest_monitor.resultCount())+" of " +
+                                                     str(subtest_monitor.maxTrials())+" failed")
     
-                    if break_subtest_on_single_read_fail:
-                      self.m_testutil.bufferDetailInfo("break on test fail")
+                    
+                    if subtest_monitor.failCriteriaMet():
+                      self.m_testutil.bufferDetailInfo("break on Sub-Battery test failure: %s " % sub_battery.test_name)
                       break
-    
-                  #time.sleep(.001)  #10 ms sleep
       
-              if break_subtest_on_single_read_fail or (break_frequency_test_on_subtest_fail and loop_pass==0):
-                self.m_testutil.bufferDetailInfo("break on all/single fail")
-                break
-      
-              #time.sleep(.1)
+                    #time.sleep(.001)  #10 ms sleep
 
-            complete=True
-            #first_loop=False
-            if break_trial_on_nopass_frequency and loop_pass==0:
-              self.m_testutil.bufferDetailInfo("break on all/single fail")
-              break
+                test_battery_monitor.enterResult(subtest_monitor.passCriteriaMet())
+                if test_battery_monitor.failCriteriaMet():
+                  self.m_testutil.bufferDetailInfo("Break on Battery Test Fail")
+                  break
+        
+                #time.sleep(.1)
+  
+              complete=True
+              #first_loop=False
+              
+              if config_set_monitor.failCriteriaMet():
+                self.m_testutil.bufferDetailInfo("Break On Configuration Test Fail")
+                break
 
             
 
@@ -410,18 +613,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
             complete= retries == 0
 
               
-            
-      total_pass=0
-      total_fail=0
-      
-      for command in read_commands:
-        command_result=" %04d/%04d Pass/Fail %s" %( command[3], command[4], command[2])
-        total_pass+=command[rdcmds_passndx]
-        total_fail+=command[rdcmds_failndx]
-        
-      run_result="Total Pass Reads = %d     Total Fail Reads = %d" % (total_pass, total_fail)
-      
-      self.m_testutil.bufferDetailInfo(run_result)  
+        if config_set_monitor.failCriteriaMet():
+          self.m_testutil.bufferDetailInfo("Break on Configuration Set Test Fail")    
+     
       self.m_testutil.bufferDetailInfo("Configuration Looptest Complete!")
       
       self.m_histogram.dumpHistogram()
