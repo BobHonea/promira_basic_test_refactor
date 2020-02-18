@@ -6,23 +6,22 @@ Created on Feb 10, 2020
 
 import test_utility
 import numpy as np
-
+import collections as coll
+from builtins import None
 
 class result2DHistogram(object):
     '''
     classdocs
     collect and publish results
     '''
+    ResultSet=coll.namedtuple('ResultSet', 'index_range bucket_count bucket_parameters bucket_data data_value_list bucket_labels bucket_label_units')
+
+    basedata            = None
+    focusdata           = None
     m_testUtil          = None
-    m_bucket_labels     = None
-    m_bucket_units_label= None
-    m_bucket_values     = None
-    m_bucket_data       = None
-    m_focus_status      = None
-    m_data_labels       = None
-    m_data_values       = None
-    m_parm2data_factor  = None
-    m_data_label_format = None
+    
+    m_base_set          = None
+    m_focus_set         = None
     
     BKTFOCUS_UNDEFINED  = 0
     BKTFOCUS_NORMAL     = 1
@@ -30,54 +29,62 @@ class result2DHistogram(object):
     BKTFOCUS_IN_FOCUS   = 3
     
     
-    def __init__(self,  parameter_values, parameter_labels,
-                        parameter_units_label,
-                        parm2data_factor,
-                        data_label_format):
+    '''
+    Setup Histogram by providing:
+    1. parameter value_list    -  a list of histogram bucket centerpoint values
+    2. parameter units string  -  such as 'MHz', "ms', 'microsecond', '10e-06 sec'
+    3. data_values             -  presently only [ True, False ] accepted
+                        
+    '''
+
+    def buildBuckets(self, parameter_list, parameter_units_string, data_value_list):
+        if (type(parameter_units_string) != str):
+          self.m_testutil.fatalError("illegal label format")
+
+        _bucket_count       = len(parameter_list)
+        _index_range        = range(_bucket_count)
+        _bucket_parameters  = parameter_list
+        _bucket_index_range = range(len(parameter_list))
+        _label_units_string = parameter_units_string
+        _label_format       = '@ %d %s'
+        _data_value_list    = data_value_list
+        _bucket_labels      = [ _label_format % (parameter, _label_units_string ) for parameter in _bucket_parameters]
+        _bucket_data        = np.zeros(_bucket_count,2)
+        return self.ResultSet(index_range=_index_range, bucket_count=_bucket_count, bucket_parameters=_bucket_parameters,
+                         bucket_data=_bucket_data, data_values=_data_value_list, bucket_labels=_bucket_labels, _bucket_label_units=_label_units_string) 
+        
+      
+      
+    def __init__(self,  parameter_values, parameter_units_string, data_value_list)
         '''
         Constructor
         '''
+        self.m_base_set = self.buildBuckets(parameter_values, parameter_units_string, data_value_list)
         m_testUtil=test_utility.testUtil()
         
-        if len(parameter_labels)!=len(parameter_values):
-          self.m_testutil.fatalError("parameter values vs. labels length mismatch")
-          
-        if (parm2data_factor == 0):
-          self.m_testutil.fatalError("zero data label conversion factor")
-          
-        if (type(data_label_format) != str):
-          self.m_testutil.fatalError("illegal label format")
-          
-        self.m_bucket_labels      = parameter_labels
-        self.m_bucket_values      = parameter_values
-        self.m_bucket_units_label = parameter_units_label
-        '''
-        compute data labels
-        '''
-        
-        self.m_bucket_count       = len(self.m_bucket_values)
-        self.m_data_value_count   = len(self.m_data_values)
-        self.m_data_value_range   = range(self.m_data_value_count)
-        self.m_bucket_range       = range(self.m_bucket_count)
-        self.m_bucket_focus       = [ self.BKTFOCUS_NORMAL for _ndx in self.m_bucket_range]
-        
-        self.createDataLabels()
-        
-        '''
-        create data bucket array
-        '''
-        s=(self.m_bucket_count,2)
-        self.m_bucket_data      = np.zeros(s)
 
 
-    def createDataLabels(self):
-        self.m_data_values        = [((value*self.m_parm2data_factor) for value in self.m_bucket_values)]
-        self.m_data_labels        = [ (self.m_data_label_format % value) for value in self.m_data_values]
 
     def addData(self, parameter_value, data_value):
-      bucket_ndx=self.m_bucket_values.index(parameter_value)
-      data_ndx=self.m_data_values.index(data_value)
-      self.m_bucket_data[bucket_ndx,data_ndx]+=1
+      if self.m_focus_enabled:
+        # update focus bucket spectrum
+        bucket_ndx=self.m_focus_set.bucket_parameters.index(parameter_value)
+        data_ndx=self.m_focus_set.data_value_list.index(data_value)
+        self.m_focus_set.bucket_data[bucket_ndx, data_ndx]+=1
+        
+        # update to original bucket spectrum **also**
+        base_ndx=self.m_focus_bucket_xlat[0]
+        self.m_bucket_data[base_ndx, data_ndx]+=1
+        
+        self.m_bucket_events+=1
+
+      else:
+        bucket_ndx=self.m_base_set.bucket_parameters.index(parameter_value)
+        data_ndx=self.m_base_set.data_value_list.index(data_value)
+        self.m_base_set.bucket_data[bucket_ndx, data_ndx]+=1
+
+        # update the bucket spectrum
+        self.m_bucket_events+=1
       pass
     
     def bucketFocus(self, parameter_value):
@@ -89,13 +96,188 @@ class result2DHistogram(object):
       test_utility.testUtil().bufferDisplayInfo(out_string)
 
     '''
-    dumpFocusHistogram
+    Histogram Bucket Weight
+    Histogram Bucket Granularity
     
-    display the 'focused' histogram data
+    The range in the initial configuration of clock frequencies must be preserved
+      ...so test coverage is not lost
+      
+    The focus of results desplay can be focused on buckets with "mixed' pass/fail
+    results.
+    
+    The number of tests in buckets with unmixed pass/fail results can be reduced.
+      ...since they are stable on all-pass or all-fail, they aren't interesting
+      
+    On a heuristic level, all-pass/all-fail buckets furthest from the mixed result
+    buckets are presumed to be unlikely to fail. the testing in these buckets can
+    be reduced to a level to continue to confirm their stability, and to catch 
+    any new instability.
+    
+    heuristic:  the further a bucket is from a mixed-result bucket the less weight
+                the less weight, fewer tests / greater decimation of test events
+                the more equal pass and fail numbers are, the more 'lensing'
+                  lensing: local increase in granularity (decrease in bucket width)
+    
     
     '''
-    def dumpFocusHistogram(self):
       
+    m_bucket_weight           = None
+    m_bucket_pfratio          = None
+    m_bucket_pass_event_ratio = None
+    m_bucket_focus_code       = None
+    
+    m_refocus_bucket_values   = None
+    m_refocus_bucket_weight   = None
+    m_refocus_bucket_pfratio  = None
+    
+    m_focus_magnification     = 3
+    
+    LENSE_UNDEFINED           = 0
+    LENSE_DEFOCUS             = 1
+    LENSE_UNCHANGED           = 2
+    LENSE_FOCUS               = 3
+
+
+
+    def dumpFocusHistogram(self):
+      s=(0,2)
+      data_max_count=np.zeros(2)
+      data_min_count=np.zeros(2)
+      max_count_label=['','']
+      min_count_label=['','']
+      data_total_count=np.zeros(2)
+      
+      for ndx in range(len(self.m_bucket_data)):
+        for ydx in range (len(self.m_data_values)):
+          if self.m_bucket_data[ndx][ydx] > data_max_count[ydx]:
+            # update total count
+            data_total_count[ydx]+=self.m_bucket_data[ndx,ydx]
+
+
+          # test/update max count
+          if self.m_bucket_data[ndx][ydx] > data_max_count[ydx]:
+            data_max_count[ydx]=self.m_bucket_data[ndx][ydx]
+            max_count_label.pop(ydx)
+            max_count_label.insert(ydx,self.m_bucket_labels[ndx])
+            pass
+              
+          # test/update min count
+          if self.m_bucket_data[ndx][ydx] < data_min_count[ydx]:
+            data_min_count[ydx]=self.m_bucket_data[ndx][ydx]
+            max_count_label.pop(ydx)
+            max_count_label.insert(ydx,self.m_bucket_data[ndx])
+            pass
+    
+
+      '''
+      display total trials
+      display total events for each data value
+      '''
+      total_trials=data_total_count[0]+data_total_count[1]
+      self.display("Total Trials= %d" % total_trials)
+      for ydx in self.m_data_value_range:
+        self.display("Total %s = %d" % (self.m_data_labels[ydx],data_total_count[ydx]))
+        
+      '''
+      display max/min for each data value
+      '''  
+      for ndx in self.m_data_value_range:
+        self.display("Max %s = %d at %s" % (self.m_data_labels[ndx],data_max_count[ndx], max_count_label[ndx]))
+        self.display("Min %s = %d at %s" % (self.m_data_labels[ndx],data_min_count[ndx], min_count_label[ndx]))
+        
+        
+      for ydx in self.m_bucket_range:
+        if self.m_bucket_data[ydx,0]!=0 or self.m_bucket_data[ydx,1]!=0:
+          self.display('%s:%s at %s %s = %04d:%04d' %  (self.m_data_labels[0], self.m_data_labels[1], 
+                                                 self.m_bucket_labels[ydx], 
+                                                 self.m_bucket_units_label,
+                                                 self.m_bucket_data[ydx,0],
+                                                 self.m_bucket_data[ydx,1]))
+              
+      '''
+      display max counts
+      '''
+
+      #for ndx in range (len(self.m_bucket_data)):
+      pass
+      
+
+    def genFocusHistogram(self):
+      
+      self.m_bucket_weight=[]
+      self.m_bucket_pass_ratio=[]
+      
+      '''
+      get continuum of pass/event ratio in .1 units
+      '''
+      lense_width=3
+
+      for index in self.m_bucket_range:
+        self.m_bucket_pass_ratio.append(int(10*float(self.m_bucket_data[0])/self.m_bucket_events))
+        
+
+      '''
+      compute pf difference
+      assign focus codes to base buckets
+      compute total focus histogram buckets 
+      '''
+        
+      self.m_bucket_focus_code=[]
+        
+      for index in self.m_bucket_range:
+        lense_min_index=max[index-lense_width, 0]
+        lense_max_index=min[len(self.m_bucket_range), index+lense_width]
+        lensing_sum=0
+        
+        for lense_index in range(lense_min_index, lense_max_index)
+          if self.m_bucket_pass_ratio[index]!=self.m_bucket_pass_ratio[lense_index]:
+            lensing_sum+=1
+            
+        self.m_lensing_sum.append(lensing_sum)
+        self.m_focus_display_buckets = 0
+        focus_bucket_sum = 0
+        
+        for index in self.m_bucket_range:
+          lensing_sum = self.m_lensing_sum[index]
+          
+          if lensing_sum < 3:
+            focus_code = self.LENSE_DEFOCUS
+            focus_buckets = 1
+          elif lensing_sum < 5:
+            focus_code = self.LENSE_UNCHANGED
+            focus_buckets = 1
+          else:
+            focus_code = self.LENSE_FOCUS
+            focus_buckets = self.m_focus_magnification
+
+          self.m_bucket_focus_code=focus_code
+          focus_bucket_sum += focus_buckets
+        
+        self.m_focus_buckets_range=range(focus_bucket_sum)
+        self.m_focus_bucket_xlat=[]
+        
+
+        self.m_bucket_xlat = []
+        
+        for index in self.m_bucket_range:
+          bucket_focus_code = self.m_bucket_focus_code[index]
+          if bucket_focus_code==self.LENSE_DEFOCUS:
+            self.m_bucket_xlat.append([index, self.LENSE_DEFOCUS])
+          elif bucket_focus_code==self.LENSE_UNCHANGED:
+            self.m_bucket_xlat.append([index, self.LENSE_UNCHANGED])
+          else:
+            focus_bucket=[index, self.LENSE_FOCUS]
+            for index in range(self.m_focus_magnification):
+              self.m_bucket_xlat.append(focus_bucket)
+              
+        
+
+          
+      
+          
+        
+      
+      pass
     def dumpHistogram(self):
       
       s=(0,2)

@@ -185,7 +185,8 @@ class spiIO:
     # Power the target device with none, one or two power sources
     self.setTargetpower(self.m_spi_tgt_v1_fixed, self.m_spi_tgt_v2_var)
 
-    pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
+    self.m_spi_clk_kHz_actual=pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
+    self.m_testutil.bufferDetailInfo("SPI Clk kHz setting= %d, Actual SPI Clk kHz= %d" %(self.m_spi_clk_kHz, self.m_spi_clk_kHz_actual), True)
     
     #configure static spi parameters
     retval=pmact.ps_spi_configure( self.m_channel_handle,
