@@ -74,7 +74,7 @@ class result2DHistogram(object):
         
         # update to original bucket spectrum **also**
         base_ndx=self.m_focus_bucket_xlat[0]
-        self.m_bucket_data[base_ndx, data_ndx]+=1
+        self.basedata.bucket_data[base_ndx, data_ndx]+=1
         
         self.m_bucket_events+=1
 
@@ -147,25 +147,25 @@ class result2DHistogram(object):
       min_count_label=['','']
       data_total_count=np.zeros(2)
       
-      for ndx in range(len(self.m_bucket_data)):
+      for ndx in range(len(self.basedata.bucket_data)):
         for ydx in range (len(self.m_data_values)):
-          if self.m_bucket_data[ndx][ydx] > data_max_count[ydx]:
+          if self.basedata.bucket_data[ndx][ydx] > data_max_count[ydx]:
             # update total count
-            data_total_count[ydx]+=self.m_bucket_data[ndx,ydx]
+            data_total_count[ydx]+=self.basedata.bucket_data[ndx,ydx]
 
 
           # test/update max count
-          if self.m_bucket_data[ndx][ydx] > data_max_count[ydx]:
-            data_max_count[ydx]=self.m_bucket_data[ndx][ydx]
+          if self.basedata.bucket_data[ndx][ydx] > data_max_count[ydx]:
+            data_max_count[ydx]=self.basedata.bucket_data[ndx][ydx]
             max_count_label.pop(ydx)
             max_count_label.insert(ydx,self.m_bucket_labels[ndx])
             pass
               
           # test/update min count
-          if self.m_bucket_data[ndx][ydx] < data_min_count[ydx]:
-            data_min_count[ydx]=self.m_bucket_data[ndx][ydx]
+          if self.basedata.bucket_data[ndx][ydx] < data_min_count[ydx]:
+            data_min_count[ydx]=self.basedata.bucket_data[ndx][ydx]
             max_count_label.pop(ydx)
-            max_count_label.insert(ydx,self.m_bucket_data[ndx])
+            max_count_label.insert(ydx,self.basedata.bucket_data[ndx])
             pass
     
 
@@ -187,18 +187,18 @@ class result2DHistogram(object):
         
         
       for ydx in self.m_bucket_range:
-        if self.m_bucket_data[ydx,0]!=0 or self.m_bucket_data[ydx,1]!=0:
+        if self.basedata.bucket_data[ydx,0]!=0 or self.basedata.bucket_data[ydx,1]!=0:
           self.display('%s:%s at %s %s = %04d:%04d' %  (self.m_data_labels[0], self.m_data_labels[1], 
                                                  self.m_bucket_labels[ydx], 
                                                  self.m_bucket_units_label,
-                                                 self.m_bucket_data[ydx,0],
-                                                 self.m_bucket_data[ydx,1]))
+                                                 self.basedata.bucket_data[ydx,0],
+                                                 self.basedata.bucket_data[ydx,1]))
               
       '''
       display max counts
       '''
 
-      #for ndx in range (len(self.m_bucket_data)):
+      #for ndx in range (len(self.basedata.bucket_data)):
       pass
       
 
@@ -213,7 +213,7 @@ class result2DHistogram(object):
       lense_width=3
 
       for index in self.m_bucket_range:
-        self.m_bucket_pass_ratio.append(int(10*float(self.m_bucket_data[0])/self.m_bucket_events))
+        self.m_bucket_pass_ratio.append(int(10*float(self.basedata.bucket_data[0])/self.m_bucket_events))
         
 
       '''
@@ -287,25 +287,25 @@ class result2DHistogram(object):
       min_count_label=['','']
       data_total_count=np.zeros(2)
       
-      for ndx in range(len(self.m_bucket_data)):
+      for ndx in range(len(self.basedata.bucket_data)):
         for ydx in range (len(self.m_data_values)):
-          if self.m_bucket_data[ndx][ydx] > data_max_count[ydx]:
+          if self.basedata.bucket_data[ndx][ydx] > data_max_count[ydx]:
             # update total count
-            data_total_count[ydx]+=self.m_bucket_data[ndx,ydx]
+            data_total_count[ydx]+=self.basedata.bucket_data[ndx,ydx]
 
 
           # test/update max count
-          if self.m_bucket_data[ndx][ydx] > data_max_count[ydx]:
-            data_max_count[ydx]=self.m_bucket_data[ndx][ydx]
+          if self.basedata.bucket_data[ndx][ydx] > data_max_count[ydx]:
+            data_max_count[ydx]=self.basedata.bucket_data[ndx][ydx]
             max_count_label.pop(ydx)
             max_count_label.insert(ydx,self.m_bucket_labels[ndx])
             pass
               
           # test/update min count
-          if self.m_bucket_data[ndx][ydx] < data_min_count[ydx]:
-            data_min_count[ydx]=self.m_bucket_data[ndx][ydx]
+          if self.basedata.bucket_data[ndx][ydx] < data_min_count[ydx]:
+            data_min_count[ydx]=self.basedata.bucket_data[ndx][ydx]
             max_count_label.pop(ydx)
-            max_count_label.insert(ydx,self.m_bucket_data[ndx])
+            max_count_label.insert(ydx,self.basedata.bucket_data[ndx])
             pass
     
 
@@ -327,18 +327,18 @@ class result2DHistogram(object):
         
         
       for ydx in self.m_bucket_range:
-        if self.m_bucket_data[ydx,0]!=0 or self.m_bucket_data[ydx,1]!=0:
+        if self.basedata.bucket_data[ydx,0]!=0 or self.basedata.bucket_data[ydx,1]!=0:
           self.display('%s:%s at %s %s = %04d:%04d' %  (self.m_data_labels[0], self.m_data_labels[1], 
                                                  self.m_bucket_labels[ydx], 
                                                  self.m_bucket_units_label,
-                                                 self.m_bucket_data[ydx,0],
-                                                 self.m_bucket_data[ydx,1]))
+                                                 self.basedata.bucket_data[ydx,0],
+                                                 self.basedata.bucket_data[ydx,1]))
               
       '''
       display max counts
       '''
 
-      #for ndx in range (len(self.m_bucket_data)):
+      #for ndx in range (len(self.basedata.bucket_data)):
       pass
         
     def addSuccess(self, value):
@@ -374,7 +374,7 @@ class result2DHistogram(object):
       
       for index in self.m_bucket_range:
         
-        bucket_data=self.m_bucket_data[index]
+        bucket_data=self.basedata.bucket_data[index]
 
         if (all_fail_detection_count<=2 or 
             all_pass_detection_count<=2):
@@ -442,7 +442,7 @@ class result2DHistogram(object):
       reset bucket metrics
       transfer data from old buckets to new
       '''
-          self.m_bucket_data=
+          self.basedata.bucket_data=
           self.m_bucket_values=
           self.m_data_labels=
           self.m_data_values=
