@@ -4,7 +4,9 @@ import promact_is_py as pmact
 from spi_io import spiIO
 import array
 import math
+import time
 from _random import Random
+
 
 # A python program to create user-defined exception 
   
@@ -40,6 +42,12 @@ class testUtil:
   m_display_trace = False
   m_detail_echo   = False
   m_display_echo  = False
+  m_log_file      = None
+  m_log_to_file   = False
+  m_trace_to_file = False
+  m_file_log_buffer_depth = 0
+  m_file_log_buffer_lines = 0
+  m_trace_enabled = False
   _instance=None
   
   def __new__(cls):
@@ -61,6 +69,61 @@ class testUtil:
     else:
       print(fatal_msg)
     sys.exit(-1)
+
+  def openLogfile(self, file_path):
+    datetime_string=time.strftime("%Y%m%d-%H%M%S")
+    file_name="SpiReadTest_%s.log" % datetime_string
+    file_pathname=file_path+"/"+file_name
+    try:
+      with open(file_pathname,"w+") as self.m_log_file:
+        self.m_log_file.write("SPI Read Test Log File: %s" % file_name)
+        self.m_file_log_buffer_depth = 200
+        self.m_file_log_buffer_lines = 0
+        return self.m_log_file
+      
+    except IOError as e:
+      print("Open or Write Failure to %s: %s" %(file_pathname, e))
+      self.fatalError("File I/O Error")
+      
+    finally:
+      return
+
+  
+  def closeLogFile(self):
+    self.flushLogBuffer()
+    self.m_log_file.close()
+
+  def enableLogfile(self):
+    if self.m_log_file!=None:
+      self.m_trace_to_file = True
+    
+  def disableLogfile(self):
+    if self.m_log_file!=None:
+      self.m_trace_to_file = False
+    
+  def initLogfileBuffer(self, buffer_depth):
+    self.m_file_log_buffer=[]
+    self.m_file_log_buffer_depth=buffer_depth
+
+  def bufferLogfileLine(self, string_info):
+    self.m_file_log_buffer.append(string_info)
+    self.m_file_log_buffer_lines+=1
+    if self.m_file_log_buffer_lines==self.m_file_log_buffer_depth:
+      self.flushLogFile()
+      self.m_file_log_buffer_lines=0
+  
+  def flushLogfileBuffer(self):
+    if len(self.m_file_log_buffer) > 0:
+      try:
+        for line in self.m_file_log_buffer:
+          self.m_log_file.write(line)
+
+      except IOError as e:
+        self.fatalError("File Write Fail: %s" % e)
+
+      finally:
+        return
+  
 
   def traceEnabled(self):
     return self.m_trace_enabled
@@ -114,13 +177,17 @@ class testUtil:
       self.bufferTraceInfo(string_info, echo)
     if self.m_display_echo or echo:
       print(string_info)
+    if self.m_log_to_file:
+      self.bufferLogfileLine(string_info)
       
   def bufferDetailInfo(self, string_info, echo=False):
     if self.m_detail_trace:
       self.bufferTraceInfo(string_info, echo)
-      if self.m_detail_echo or echo:
-        print(string_info)
-        
+    if self.m_detail_echo or echo:
+      print(string_info)
+    if self.m_log_to_file:
+      self.bufferLogfileLine(string_info)
+    
   def bufferTraceInfo(self, string_info, echo=False):
     if self.m_trace_enabled:
       if self.m_trace_depth>0:
@@ -240,7 +307,7 @@ class testUtil:
       return self.m_ref_array_list[self.m_ref_array_index]
 
 
-  def printArrayHexDump(self, label, data_array=None):
+  def printArrayHexDump(self, label, data_array=None, echo_to_display=False):
     
     if not type(data_array)==array.ArrayType or len(data_array)==0:
       self.bufferDisplayInfo("Hexdump:  array is empty")
@@ -251,7 +318,7 @@ class testUtil:
     array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
     dump_bytes = array_size
     dump_index = 0
-    self.bufferDisplayInfo("%s [ 0x%x bytes ]" % (label, array_size))
+    self.bufferDisplayInfo("%s [ 0x%x bytes ]" % (label, array_size), echo_to_display)
     for line in range(array_lines):
       linestart = line * bytes_per_line
       linestring = " %02X : " % linestart
@@ -263,7 +330,7 @@ class testUtil:
       for dump_index in range(dump_index, dump_index + line_bytes):
         value = data_array[dump_index]
         linestring = linestring + " %02X" % value
-      self.bufferDetailInfo(linestring)
+      self.bufferDetailInfo(linestring, echo_to_display)
  
  
  
@@ -274,7 +341,7 @@ class testUtil:
     of array_b where they differ with array_a.
   '''  
 
-  def printArrayHexDumpWithErrors(self, label, data_array, pattern_array):
+  def printArrayHexDumpWithErrors(self, label, data_array, pattern_array, echo_to_display=False):
 
     '''
     diffLine
@@ -302,7 +369,7 @@ class testUtil:
             diff_text[index]=">%02x"%reference
           last_index=index
           
-        self.bufferDetailInfo('      '+''.join(diff_text))
+        self.bufferDetailInfo('      '+''.join(diff_text), echo_to_display)
         return False
       
       else:
@@ -310,7 +377,7 @@ class testUtil:
     
     
     if not type(data_array)==array.ArrayType or len(data_array)==0:
-      self.bufferDetailInfo("Hexdump:  array is empty")
+      self.bufferDetailInfo("Hexdump:  array is empty", echo_to_display)
       return
     
     bytes_per_line = 32
@@ -318,7 +385,7 @@ class testUtil:
     array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
     dump_bytes = array_size
     dump_index = 0
-    self.bufferDetailInfo("%s [ 0x%x bytes ]" % (label, array_size))
+    self.bufferDetailInfo("%s [ 0x%x bytes ]" % (label, array_size), echo_to_display)
     
     for line in range(array_lines):
       line_start = line * bytes_per_line
@@ -331,28 +398,44 @@ class testUtil:
       line_end=line_start+bytes_per_line
       data_sub_array=data_array[line_start:line_end]
       pattern_sub_array=pattern_array[line_start:line_end]
-      pattern_match=self.arraysMatch(data_sub_array, pattern_sub_array)
+      pattern_match, errors =self.arraysMatch(data_sub_array, pattern_sub_array)
 
       if not pattern_match:
-        self.bufferDetailInfo("")
+        self.bufferDetailInfo("", echo_to_display)
         
       for dump_index in range(dump_index, dump_index + line_bytes):
         value = data_array[dump_index]
         line_string = line_string + " %02X" % value
       
-      self.bufferDetailInfo(line_string)
+      self.bufferDetailInfo(line_string, echo_to_display)
       if not pattern_match:
         printDiffLine(data_array[line_start:line_end], pattern_array[line_start:line_end])
         
   pass
  
+  def arraySingleValued(self, array_a):
+    byte_0=array_a[0]
+    match_count=0
+    
+    for item in array_a:
+      if item!= byte_0:
+        break
+      match_count+=1
+      
+    return match_count==len(array_a), match_count
+      
   def arraysMatch(self, array_a, array_b):
-    match=False
+    errors=0
     if len(array_a) == len(array_b):
       for index in range (len(array_a)):
         if array_a[index]==array_b[index]:
           continue
         else:
-          return False
-    return True
+          errors+=1
+          continue
+
+    if errors >= 250:
+      errors+=0        
+      
+    return errors==0, errors
   pass

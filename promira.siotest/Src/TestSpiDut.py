@@ -65,7 +65,9 @@ import promactive_msg as pmmsg
 import time
 import collections as coll
 from cmd_protocol import RVCFG
-from result_histogram import result2DHistogram
+#from result_histogram import result2DHistogram
+#from error_histogram import parameterizedErrorHistogram
+from err_fault_histogram import parameterizedErrorHistogram
 
 
 
@@ -196,16 +198,22 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
 
       
-    if not self.m_testutil.arraysMatch(rxdata_array, pattern_array):
+    arrays_match, errors=self.m_testutil.arraysMatch(rxdata_array, pattern_array)
+    single_valued_input=False
+    
+    if not arrays_match:
+
         self.m_testutil.bufferDetailInfo("%s comparison fault" % cmd_namestring)
+        single_valued_input, error_count=self.m_testutil.arraySingleValued(rxdata_array)
+
         if verbose:
+          if single_valued_input:
+            self.m_testutil.bufferDetailInfo("rxdata array is single valued")          
           self.m_testutil.bufferDetailInfo("Sector Address %x" % address)
 
-          self.m_testutil.printArrayHexDumpWithErrors("EEProm %s" % cmd_namestring, rxdata_array, pattern_array)
+          self.m_testutil.printArrayHexDumpWithErrors("EEProm %s" % cmd_namestring, rxdata_array, pattern_array, verbose)
           
-        return False
-    return True
-
+    return arrays_match, errors, single_valued_input
 
 
   '''
@@ -296,6 +304,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
   
   class testMonitor(object):
     def __init__(self, criteria, maximum_trials):
+      self.m_testutil=testutil.testUtil()
+      
       if  (criteria in [promiraSpiTestApp.CRITERIA_GENERAL, promiraSpiTestApp.CRITERIA_STRICT,
                         promiraSpiTestApp.CRITERIA_SEVERE]
           and maximum_trials>0 ):
@@ -354,12 +364,23 @@ class promiraSpiTestApp(usertest.SwUserTest):
         
       return False
     
+
+  
+    
   def runTest(self):
+    
+
+
+    enable_single_iowidth_read    = True
+    enable_hs_single_iowidth_read = True
+    enable_dual_iowidth_read      = True
+  
+    read_enables = [ enable_single_iowidth_read, enable_hs_single_iowidth_read, enable_dual_iowidth_read]
 
     control=self.ReadTestControl(
-      read_single_iowidth             = True,
-      read_hispeed_single_iowidth     = True,
-      read_dual_iowidth               = True,
+      read_single_iowidth             = enable_single_iowidth_read,
+      read_hispeed_single_iowidth     = enable_hs_single_iowidth_read,
+      read_dual_iowidth               = enable_dual_iowidth_read,
       severe                          = self.CRITERIA_SEVERE,
       strict                          = self.CRITERIA_STRICT,
       general                         = self.CRITERIA_GENERAL,
@@ -377,7 +398,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       break_on_battery_fail           = [self.BREAKTYPE_NONE],
       break_on_configuration_fail     = [self.BREAKTYPE_NONE],
       break_on_config_set_fail        = [self.BREAKTYPE_NONE],
-      sub_battery_tests_per_battery   = 3,
+      sub_battery_tests_per_battery   = read_enables.count(True),
       battery_tests_per_configuration = 3,
       sufficient_command_tests_per_trial = 50000,
       use_auto_vernier                = False,
@@ -389,6 +410,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     txdata_array = self.m_testutil.firstReferencePageArray()
     _txdata_count = len(txdata_array)
     
+    self.m_testutil.printArrayHexDump("Reference Array", txdata_array, True)
 
     '''
     flags control test loop contents
@@ -396,7 +418,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
     verbose=True
     write_data = False
-  
+    self.m_single_valued_failure=0
     
     eeprom_unlocked=False
 
@@ -404,21 +426,41 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
     
     configOptions=self.m_configVal.getSpiConfigOptions()
+    
     parameter_values  = configOptions.clk_kHz
-    parameter_labels  = [ ("%02.3f" % (float(frequency)/1000)) for frequency in configOptions.clk_kHz ]
+    parameter_labels  = [ ("%06.3f" % (float(frequency)/1000)) for frequency in configOptions.clk_kHz ]
     parameter_units_label = "MHz"
     data_values       = [ True, False ]
     data_labels       = [ 'Pass', 'Fail']
+    '''
     self.m_histogram=result2DHistogram( parameter_values, parameter_labels, 
                                         parameter_units_label, 
                                         data_values, data_labels)
+    '''
+
+    
+    error_buckets=[0, 1, 4, 8, 16, 32, 64, 128, 256, 257 ]
+    error_bucket_labels=[ "%03d" % error for error in error_buckets]
+    error_units_label = "Error"
+
+    self.m_histogram=parameterizedErrorHistogram(
+                                        parameter_values,
+                                        parameter_labels, 
+                                        parameter_units_label, 
+                                        data_values,
+                                        data_labels,
+                                        error_buckets)
     
     spi_parameters = self.m_config_mgr.firstConfig()
     self.m_spiio.initSpiMaster(spi_parameters)
     
-    
-
     self.m_testutil.initTraceBuffer(200)
+    self.m_testutil.traceEnabled()
+    self.m_testutil.detailTraceOn()
+    self.m_testutil.displayTraceOn()
+    self.m_testutil.openLogfile("/usr/local/google/home/honea/results")
+    self.m_testutil.initLogfileBuffer(1000)
+    self.m_testutil.enableLogfile()
     #self.m_testutil.detailEchoOn()
   
     
@@ -478,20 +520,31 @@ class promiraSpiTestApp(usertest.SwUserTest):
   
     
     
-    battery_commands = [
-      self.SubtestControl(test_selected=control.read_hispeed_single_iowidth,
-                          command_code=protocol.HSREAD, test_name="Highspeed Read",
-                          test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
-                                                        control.sub_battery_tests_per_battery)),
-      self.SubtestControl(test_selected=control.read_single_iowidth,
-                          command_code=protocol.READ, test_name="Read", 
-                          test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
-                                                        control.sub_battery_tests_per_battery)),
-      self.SubtestControl(test_selected=control.read_dual_iowidth,
-                          command_code=protocol.SDOREAD, test_name="Dual Output Read", 
-                          test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
-                                                        control.sub_battery_tests_per_battery))]
+    hispeed_control     = self.SubtestControl(test_selected=control.read_hispeed_single_iowidth,
+                                              command_code=protocol.HSREAD, test_name="Highspeed Read",
+                                              test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
+                                              control.sub_battery_tests_per_battery))
+
+    read_hispeed_control= self.SubtestControl(test_selected=control.read_single_iowidth,
+                                              command_code=protocol.READ, test_name="Read", 
+                                              test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
+                                              control.sub_battery_tests_per_battery))
+    
+    read_dual_control   = self.SubtestControl(test_selected=control.read_dual_iowidth,
+                                              command_code=protocol.SDOREAD, test_name="Dual Output Read", 
+                                              test_monitor=self.testMonitor(control.sub_battery_passfail_criteria,
+                                              control.sub_battery_tests_per_battery))
       
+      
+    '''
+    pre-select command controls / command set to be tested
+    '''  
+    subtest_set       = [hispeed_control, read_hispeed_control, read_dual_control ]
+    battery_commands  = []
+    
+    for subtest in subtest_set:
+      if subtest.test_selected==True:
+        battery_commands.append(subtest)
 
 
     trial_monitor=self.testMonitor(self.CRITERIA_GENERAL, control.sufficient_command_tests_per_trial)
@@ -502,22 +555,27 @@ class promiraSpiTestApp(usertest.SwUserTest):
       '''
   
 
-      
+      # trial inner-loop
       config_set_monitor=self.testMonitor(self.CRITERIA_GENERAL, len(self.m_config_mgr.m_spi_config_list))
-      for spi_parameters in self.m_config_mgr.m_spi_config_list:
+      config_list=self.m_config_mgr.m_spi_config_list
+      for spi_parameters in config_list:
+        
         '''
         Test one configuration
         '''
-        
+        # configuration inner loop
+        #self.m_testutil.bufferDisplayInfo("Testing config #%03d of %03d" % (config_list.index(spi_parameters), len(config_list)) )
         retries=2
-        complete=False
-        while not complete:        
+        one_config_test_complete=False
+        while not one_config_test_complete: 
+          #configuration test loop       
           try:
 
+            # configuration test try 
             self.m_testutil.traceEchoOff()
-            self.m_testutil.flushTraceBuffer()
-            self.m_testutil.detailTraceOn()
-            self.m_testutil.displayTraceOn()   
+#            self.m_testutil.flushTraceBuffer()
+#            self.m_testutil.detailTraceOn()
+#            self.m_testutil.displayTraceOn()   
       
             self.m_testutil.bufferDetailInfo(repr(spi_parameters))
             
@@ -559,7 +617,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
             test_battery_monitor=self.testMonitor(control.battery_passfail_criteria, control.battery_tests_per_configuration)
             while not test_battery_monitor.testComplete():
               
+              #battery test level
               for sub_battery in battery_commands:
+
+                # sub-battery test level
                 subtest_command=sub_battery.command_code
                 subtest_monitor=sub_battery.test_monitor
                 subtest_monitor.reset()
@@ -569,54 +630,66 @@ class promiraSpiTestApp(usertest.SwUserTest):
                 '''
                 
                 while not subtest_monitor.testComplete():
-                  if sub_battery.test_selected==True:
-                    test_pass=self.readTest(subtest_command, subtest_name, page_address,
-                                             self.m_eepromAPI.EEPROM_PAGE_SIZE, txdata_array, verbose)
-                    
-                    subtest_monitor.enterResult(test_pass)
-                    self.m_histogram.addData(spi_parameters.clk_kHz, test_pass)
-                    
-                    self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
-                    self.m_testutil.bufferDetailInfo("subtest iteration #"+str(subtest_monitor.resultCount())+" of " +
-                                                     str(subtest_monitor.maxTrials())+" failed")
+                  #sub-battery subtest test level
+                  test_pass, errors, single_valued =self.readTest( subtest_command,
+                                                                   subtest_name,
+                                                                   page_address,
+                                                                   self.m_eepromAPI.EEPROM_PAGE_SIZE,
+                                                                   txdata_array,
+                                                                   False)
+                  
+                  subtest_monitor.enterResult(test_pass)
+                  self.m_histogram.addData(spi_parameters.clk_kHz, test_pass, errors, single_valued)
+                  
+                  self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
+                  self.m_testutil.bufferDetailInfo("subtest iteration #"+str(subtest_monitor.resultCount())+" of " +
+                                                   str(subtest_monitor.maxTrials())+" failed")
+  
+                  
+                  if subtest_monitor.failCriteriaMet():
+                    self.m_testutil.bufferDetailInfo("break on Sub-Battery test failure: %s " % sub_battery.test_name)
+                    break
     
-                    
-                    if subtest_monitor.failCriteriaMet():
-                      self.m_testutil.bufferDetailInfo("break on Sub-Battery test failure: %s " % sub_battery.test_name)
-                      break
-      
-                    #time.sleep(.001)  #10 ms sleep
+                  #time.sleep(.001)  #10 ms sleep
 
+              # battery test level
                 test_battery_monitor.enterResult(subtest_monitor.passCriteriaMet())
                 if test_battery_monitor.failCriteriaMet():
                   self.m_testutil.bufferDetailInfo("Break on Battery Test Fail")
                   break
-        
-                #time.sleep(.1)
+      
+              #time.sleep(.001)
   
-              complete=True
-              #first_loop=False
-              
-              if config_set_monitor.failCriteriaMet():
-                self.m_testutil.bufferDetailInfo("Break On Configuration Test Fail")
-                break
+            one_config_test_complete=True
+            #first_loop=False
+            
+
+            config_set_monitor.enterResult(test_battery_monitor.passCriteriaMet())
+            if config_set_monitor.failCriteriaMet():
+              self.m_testutil.bufferDetailInfo("Break On Configuration Test Fail")
+              break
 
             
 
           except self.m_spiio.PromiraError as e:
             print(e)
+            self.m_histogram.addFault(spi_parameters.clk_kHz, e[0], e[1])
             self.m_testutil.dumpTraceBuffer()
             self.m_spiio.devResetOpen()
             retries-=1
-            complete= retries == 0
+            one_config_test_complete= retries == 0
 
               
         if config_set_monitor.failCriteriaMet():
           self.m_testutil.bufferDetailInfo("Break on Configuration Set Test Fail")    
      
       self.m_testutil.bufferDetailInfo("Configuration Looptest Complete!")
-      
+
+      if self.m_single_valued_failure>0:
+        self.m_testutil.bufferDetailInfo("Total Single Valued Failures = %s" % self.m_single_valued_failure, True)
+
       self.m_histogram.dumpHistogram()
+
 
       if control.use_auto_vernier and auto_vernier_cycle_count>control.auto_vernier_soak_cycles:
         auto_vernier_cycle_count+=1
@@ -625,7 +698,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
           vernier_bucket_values, vernier_bucket_labels=self.m_histogram.refine_buckets(min_kHz_vernier_value)
           if vernier_bucket_values != None:
             self.m_testutil.bufferDisplayInfo("Restarting TestRun / Resetting Bucket Definitions")
-            self.m_histogram=result2DHistogram(vernier_bucket_values,
+            self.m_histogram=parameterizedErrorHistogram(
+                                               vernier_bucket_values,
                                                vernier_bucket_labels,
                                                parameter_units_label,
                                                data_values,
@@ -643,6 +717,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
           else:
             # retry in cycle counts, try again much later
             auto_vernier_cycle_count=0
+            
+    self.m_testutil.closeLogFile()
           
           
           

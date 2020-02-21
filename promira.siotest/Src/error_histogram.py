@@ -8,7 +8,23 @@ import test_utility
 import numpy as np
 
 
-class result2DHistogram(object):
+'''
+parameterizedErrorHistorgram
+
+  Collect pass/fail/error-count data for a parameterized range
+  of test types.
+  
+  Build a histogram of errors for each parameter level.
+  
+  A single histogram of pass/fail/error-count for each parameter level.
+  For each parameter lavel, a histogram of error counts.
+  
+  The buckets for the parameterized axis is supplied by user.
+  The max-values for each error bucket is supplied by user.
+  
+'''
+
+class parameterizedErrorHistogram(object):
     '''
     classdocs
     collect and publish results
@@ -18,22 +34,17 @@ class result2DHistogram(object):
     m_bucket_units_label= None
     m_bucket_values     = None
     m_bucket_data       = None
-    m_focus_status      = None
     m_data_labels       = None
     m_data_values       = None
-    m_parm2data_factor  = None
-    m_data_label_format = None
+    m_event_count       = None
+
     
-    BKTFOCUS_UNDEFINED  = 0
-    BKTFOCUS_NORMAL     = 1
-    BKTFOCUS_DECIMATE   = 2
-    BKTFOCUS_IN_FOCUS   = 3
-    
-    
-    def __init__(self,  parameter_values, parameter_labels,
-                        parameter_units_label,
-                        parm2data_factor,
-                        data_label_format):
+    def __init__(self,  parameter_values,
+                        parameter_labels,
+                        parameter_units_label, 
+                        data_values,
+                        data_labels,
+                        error_max_values):
         '''
         Constructor
         '''
@@ -42,61 +53,144 @@ class result2DHistogram(object):
         if len(parameter_labels)!=len(parameter_values):
           self.m_testutil.fatalError("parameter values vs. labels length mismatch")
           
-        if (parm2data_factor == 0):
-          self.m_testutil.fatalError("zero data label conversion factor")
+        if len(data_labels) != len(data_labels):
+          self.m_testutil.fatalError("data values vs labels length mismatch")
           
-        if (type(data_label_format) != str):
-          self.m_testutil.fatalError("illegal label format")
           
         self.m_bucket_labels      = parameter_labels
         self.m_bucket_values      = parameter_values
         self.m_bucket_units_label = parameter_units_label
-        '''
-        compute data labels
-        '''
-        
+        self.m_data_labels        = data_labels
+        self.m_data_values        = data_values
         self.m_bucket_count       = len(self.m_bucket_values)
         self.m_data_value_count   = len(self.m_data_values)
         self.m_data_value_range   = range(self.m_data_value_count)
         self.m_bucket_range       = range(self.m_bucket_count)
-        self.m_bucket_focus       = [ self.BKTFOCUS_NORMAL for _ndx in self.m_bucket_range]
-        
-        self.createDataLabels()
-        
-        '''
-        create data bucket array
-        '''
+        self.m_error_buckets      = error_max_values
+        self.m_error_bucket_labels= None
+        self.m_error_bucket_count = len(self.m_error_buckets)
+        self.m_event_count        = 0
+ 
         s=(self.m_bucket_count,2)
+        e=(self.m_error_bucket_count,1)
+        
         self.m_bucket_data      = np.zeros(s)
+        self.m_errors           = [ np.zeros(e) for bucket in self.m_bucket_range]
+        
 
+    def errorIndex(self, error_count):
+      bucket_ndx=0
+      for bucket in self.m_error_buckets:
+        if error_count<= bucket:
+          return bucket_ndx
+        bucket_ndx+=1
+      self.m_testutil.fatalError("input value overflow")
 
-    def createDataLabels(self):
-        self.m_data_values        = [((value*self.m_parm2data_factor) for value in self.m_bucket_values)]
-        self.m_data_labels        = [ (self.m_data_label_format % value) for value in self.m_data_values]
-
-    def addData(self, parameter_value, data_value):
+      
+    def addData(self, parameter_value, data_value, error_count, single_value_input):
+      self.m_event_count+=1
       bucket_ndx=self.m_bucket_values.index(parameter_value)
       data_ndx=self.m_data_values.index(data_value)
       self.m_bucket_data[bucket_ndx,data_ndx]+=1
-      pass
-    
-    def bucketFocus(self, parameter_value):
-      if parameter_value in self.m_bucket_values:
-        index = self.m_bucket_values.index(parameter_value)
-        return self.m_bucket_focus[index]
+
+      try:
+        error_ndx=self.errorIndex(error_count)
+        error_count_array=self.m_errors[bucket_ndx]
+        error_count_array[error_ndx]+=1
+        if single_value_input:
+          single_ndx=self.errorIndex(257)
+          error_count_array[single_ndx]+=1
+      except ValueError as e:
+        self.m_testutil.fatalError("histogram addData ValueError") 
+      
+      finally:
+        return
     
     def display(self, out_string):
       test_utility.testUtil().bufferDisplayInfo(out_string)
 
-    '''
-    dumpFocusHistogram
+
+
+    m_spaces="            "
     
-    display the 'focused' histogram data
+    def centerText(self, text, field_width):
+      #short side right
+      spaces=int(field_width-len(text))
+      space_right=int(spaces/2)
+      space_left=spaces-space_right
+      blank_left=self.m_spaces[-space_left:]
+      blank_right=self.m_spaces[-space_right:]
+      column_text=blank_left+text+blank_right
+      return column_text
     
-    '''
-    def dumpFocusHistogram(self):
+    def rightText(self, text, field_width):
+      #1 space to right of text
+      spaces=field_width-len(text)
+      if spaces>0:
+        space_right=1
+      else:
+        space_right=0
+        
+      space_left=spaces-space_right
+      return( " "*(space_left)+text+" "*space_right)
+
+    m_oneval_column_header="1-Val"
+    
+    def columnWidth(self):
+      minimum_width=len(self.m_oneval_column_header)+2
+      dynamic_width=self.m_number_width+2
+      return max([dynamic_width, minimum_width])
+
+    def histogramHeader(self):
+      column_width=self.columnWidth()
+
+      error_header=self.centerText("SPI-Clock", 12)
+      error_header=error_header+" |"
+      error_header=error_header+self.centerText("Pass",column_width)
+      error_header=error_header+" : "
+      error_header=error_header+self.centerText("Fail",column_width)
       
+      error_header=error_header+"   ["
+
+      for value in self.m_error_buckets:
+        if value==257:
+          display_value=self.centerText(self.m_oneval_column_header, column_width)
+        else:
+          display_value=self.centerText("%d"%value, column_width)
+          
+        error_header=error_header+display_value
+        
+      error_header=error_header+"]"
+      topline= "*" * len(error_header)
+      bottom=  "-" * len(error_header)
+      return [ topline, error_header, bottom ]
+
+
+    
+    def errorCountBuckets(self, bucket_ndx):
+      column_width=self.columnWidth()
+      
+      if bucket_ndx >= len(self.m_errors):
+        self.m_testutil.fatalError("Index Out Of Range")
+                                   
+      error_count_array=self.m_errors[bucket_ndx]
+      error_display=" ["
+
+      for value in error_count_array:
+        if value==0:
+          display_value=self.centerText('-', column_width)
+        else:
+          display_value=self.centerText("%d"%value, column_width)
+          
+        error_display=error_display+display_value
+        
+      error_display=error_display+"]"
+      return error_display
+  
     def dumpHistogram(self):
+      
+      # width of total events is width of largest number
+      self.m_number_width=len(str(self.m_event_count))
       
       s=(0,2)
       data_max_count=np.zeros(2)
@@ -144,13 +238,19 @@ class result2DHistogram(object):
         self.display("Min %s = %d at %s" % (self.m_data_labels[ndx],data_min_count[ndx], min_count_label[ndx]))
         
         
+      for line in self.histogramHeader():
+        self.display(line)
+          
+      column_width=self.columnWidth()
+      
       for ydx in self.m_bucket_range:
         if self.m_bucket_data[ydx,0]!=0 or self.m_bucket_data[ydx,1]!=0:
-          self.display('%s:%s at %s %s = %04d:%04d' %  (self.m_data_labels[0], self.m_data_labels[1], 
-                                                 self.m_bucket_labels[ydx], 
+          self.display('  %s %s | %s:%s | %s' 
+                                             %  (self.m_bucket_labels[ydx], 
                                                  self.m_bucket_units_label,
-                                                 self.m_bucket_data[ydx,0],
-                                                 self.m_bucket_data[ydx,1]))
+                                                 self.centerText(str(int(self.m_bucket_data[ydx,0])), column_width),
+                                                 self.centerText(str(int(self.m_bucket_data[ydx,1])), column_width),
+                                                 self.errorCountBuckets(ydx)) )
               
       '''
       display max counts
@@ -219,59 +319,13 @@ class result2DHistogram(object):
                         
                       
       #use highest all_fail index               
-      vernier_max_focus_index=all_fail_bucket_indices[-1]
+      vernier_max_index=all_fail_bucket_indices[-1]
       #use lowest all succeed index
-      vernier_min_focus_index=all_pass_bucket_indices[0]
+      vernier_min_index=all_pass_bucket_indices[0]
       
-      new_bucket_values=[]
-      new_bucket_focus=[]
-      focus_factor=4
-      focus_factor_range=range(focus_factor)
-      
-      max_vernier_value = self.m_bucket_values[vernier_max_focus_index]
-      min_vernier_value = self.m_bucket_values[vernier_min_focus_index]
 
-
-      for index in self.m_bucket_range:
-        # lower focus intensity outside focus range
-        if ( bucket_data[index] < vernier_min_focus_index 
-              or bucket_data[index] > vernier_max_focus_index ):
-          new_bucket_focus.append(self.BKTFOCUS_DECIMATE)
-          new_bucket_values=self.bucket_values[index]
-        else:
-          # increase bucket granularity and higher intensity
-          # within focus range
-          if (index+1) in self.m_bucket_range:
-            next_bucket_value=self.m_bucket_values[index+1]
-            old_bucket_size=next_bucket_value=self.m_bucket_values[index]
-          else:
-            old_bucket_size=self.m_bucket_values[index]-self.m_bucket_values[index-1]
-          pass 
-
-          # increase bucket granularity within focus range
-          sub_bucket_size=old_bucket_size/focus_factor
-
-          for subindex in focus_factor_range:    
-            new_bucket_focus.append(self.BKTFOCUS_IN_FOCUS)
-            new_bucket_values.append(self.m_bucket_values[index]+subindex*sub_bucket_size)
-
-
-      '''
-      reset bucket metrics
-      transfer data from old buckets to new
-      '''
-          self.m_bucket_data=
-          self.m_bucket_values=
-          self.m_data_labels=
-          self.m_data_values=
-  
-        
-      '''
-      cast a new vernier
-      buckets outside the focus area are changed to twice their width
-      buckets inside the focus area are half their previous width
-      focus status array is re-cast
-      '''
+      max_vernier_value = self.m_bucket_values[vernier_max_index]
+      min_vernier_value = self.m_bucket_values[vernier_min_index]
       if min_vernier_value > min_bucket_value:
         min_vernier_value=min_bucket_value
       

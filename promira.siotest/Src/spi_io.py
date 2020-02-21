@@ -8,6 +8,7 @@ import array
 
 import cmd_protocol as protocol
 import test_utility as testutil
+from LibAppArmor._LibAppArmor import aa_log_record_error_code_get
 
 
 
@@ -185,8 +186,7 @@ class spiIO:
     # Power the target device with none, one or two power sources
     self.setTargetpower(self.m_spi_tgt_v1_fixed, self.m_spi_tgt_v2_var)
 
-    self.m_spi_clk_kHz_actual=pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
-    self.m_testutil.bufferDetailInfo("SPI Clk kHz setting= %d, Actual SPI Clk kHz= %d" %(self.m_spi_clk_kHz, self.m_spi_clk_kHz_actual), True)
+    pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
     
     #configure static spi parameters
     retval=pmact.ps_spi_configure( self.m_channel_handle,
@@ -345,7 +345,7 @@ class spiIO:
         
         if t < 0:
           fatal_error=True
-          return None, None, fatal_error
+          return t, result_msg, fatal_error
           
         if t == pmact.PS_SPI_CMD_READ:
             _ret, _word_size, buf = pmact.ps_collect_spi_read(collect, result)
@@ -370,7 +370,10 @@ class spiIO:
     if fatal_error:
       #self.signalEvent()
       #self.m_testutil.fatalError("Error In DevCollect")
-      raise self.PromiraError("Error In DevCollect")
+      error_code=_ret
+      error_msg=buf
+      
+      raise self.PromiraError([error_code, error_msg])
     return _ret, buf
   
 
