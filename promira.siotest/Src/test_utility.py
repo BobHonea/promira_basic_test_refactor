@@ -8,6 +8,7 @@ import time
 from _random import Random
 
 
+
 # A python program to create user-defined exception 
   
 # class MyError is derived from super class Exception 
@@ -48,6 +49,7 @@ class testUtil:
   m_file_log_buffer_depth = 0
   m_file_log_buffer_lines = 0
   m_trace_enabled = False
+  m_page_arrays_built = False
   _instance=None
   
   def __new__(cls):
@@ -56,7 +58,7 @@ class testUtil:
           cls._instance = super(testUtil, cls).__new__(cls)
           cls.m_random=random.Random()
           cls.m_random.seed(2000)
-          cls.buildPageArrays(cls)
+          cls.m_page_arrays_built=False
       return cls._instance
   
   
@@ -270,11 +272,18 @@ class testUtil:
     pass
   
 
+  pattern_index=0
   
+  def patternNumber(self):
+    number=int(256*math.sin(self.pattern_index*3.141579/256))  
+    self.pattern_index+=1
+    return number
+    
   def generatePatternedArray(self, array_size):
     patterned_array=pmact.array_u08(array_size)
     for index in range(array_size):
-      patterned_array[index] =int(256*math.sin(index*3.141579/256))
+      patterned_array[index] = self.patternNumber()
+      
     return patterned_array
   
       
@@ -285,19 +294,26 @@ class testUtil:
         
       return rand_array
   
+  def refArrayCount(self):
+    return self.m_ref_array_count
   
   def buildPageArrays(self):
       self.m_ref_array_list = []
-      for _index in range(self.m_ref_array_count):
+      for index in range(self.m_ref_array_count):
         if self.m_patterned_not_random_arrays:
           this_array=self.generatePatternedArray(self.m_page_size, self.m_page_size)
         else:  
           this_array=self.generateRandomArray(self.m_page_size, self.m_page_size)
              
         self.m_ref_array_list.append(this_array)
+      self.m_page_arrays_built=True
         # array_label = "Reference Page Array #%02X:" % index
         # self.printArrayHexDump(array_label, self.m_ref_array_list[index])
-          
+  
+  def nthReferencePageArray(self, index):
+    index=index % self.m_ref_array_count
+    return self.m_ref_array_list[index]
+  
   def firstReferencePageArray(self):
     self.m_ref_array_index=0
     return self.m_ref_array_list[0]

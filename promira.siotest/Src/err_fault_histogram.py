@@ -101,10 +101,11 @@ class parameterizedErrorHistogram(object):
       Fault type list index is the index for the event type count
       A list of each event is also kept
     ''' 
-    def addFault(self, parameter_value, fault_code, fault_string):
+    def addFault(self, parameter_value, fault_code, fault_api, fault_string):
 
-      fault_type=[fault_code, fault_string]
-      self.m_fault_history.append([parameter_value, fault_code, self.m_event_count])
+      fault_type=[fault_code, fault_api, fault_string]
+      self.m_fault_history.append([parameter_value, fault_code, fault_api, self.m_event_count])
+      
       if fault_type not in self.m_fault_types:
         self.m_fault_types.append(fault_type)
         self.m_fault_events.append(1)
@@ -112,6 +113,14 @@ class parameterizedErrorHistogram(object):
         fault_ndx=self.m_fault_types.index(fault_type)
         self.m_fault_events[fault_ndx]+=1
 
+    def dumpFaultHistory(self):
+      if len(self.m_fault_history) > 0:
+        self.display("******** Begin Fault History *********")
+        for fault in self.m_fault_history:
+          self.display(repr(fault))
+        self.display("********* End Fault History **********")
+      else:
+        self.display("No Faults Recorded")
 
         
     def addData(self, parameter_value, data_value, error_count, single_value_input):

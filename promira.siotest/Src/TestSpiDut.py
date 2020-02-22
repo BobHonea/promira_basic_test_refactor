@@ -164,23 +164,39 @@ class promiraSpiTestApp(usertest.SwUserTest):
     return False
   
   
-  def writeDevicePattern(self, start_page_address, length, device_byte_size, pattern_array):
+  def writeDevicePattern(self, start_page_address, length, device_byte_size):
     if start_page_address % self.m_eepromAPI.EEPROM_PAGE_SIZE != 0:
       self.m_testutil.fatalError("illegal page address")
     
     if length % self.m_eepromAPI.EEPROM_PAGE_SIZE != 0:
       self.m_testutil.fatalError("illegal page fill length")
       
-    start_page=start_page_address/self.m_eepromAPI.EEPROM_PAGE_SIZE
-    page_count=length/self.m_eepromAPI.EEPROM_PAGE_SIZE
+    start_page=int(start_page_address/self.m_eepromAPI.EEPROM_PAGE_SIZE)
+    page_count=int(length/self.m_eepromAPI.EEPROM_PAGE_SIZE)
     
     if start_page+page_count > (device_byte_size/self.m_eepromAPI.EEPROM_PAGE_SIZE):
       self.m_testutil.fatalError("write request too large")
       
+    pattern_array=self.m_testutil.firstReferencePageArray()
     for page in range(page_count):
       page_address=start_page_address+(page * self.m_eepromAPI.EEPROM_PAGE_SIZE)
-      self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, pattern_array)
-
+      
+      # need to catch promira adapter faults
+      # 
+      try_count=0
+      while try_count < 3:
+        try:
+          self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, pattern_array)
+          break
+        
+        except self.m_spiio.PromiraError as e:
+          print("Promira Error: %s" % e)
+          #re-init Promira Interfaces
+          self.m_spiio.devResetOpen()
+          try_count+=1
+          
+      pattern_array=self.m_testutil.nextReferencePageArray()
+        
   
   def readTest(self, read_cmd_byte, cmd_namestring, address, length, pattern_array, verbose):
     rxdata_array = self.m_testutil.zeroedArray(self.m_eepromAPI.EEPROM_PAGE_SIZE)
@@ -372,8 +388,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
 
     enable_single_iowidth_read    = True
-    enable_hs_single_iowidth_read = True
-    enable_dual_iowidth_read      = True
+    enable_hs_single_iowidth_read = False
+    enable_dual_iowidth_read      = False
   
     read_enables = [ enable_single_iowidth_read, enable_hs_single_iowidth_read, enable_dual_iowidth_read]
 
@@ -406,7 +422,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
 
     
-     
+    self.m_testutil.buildPageArrays() 
     txdata_array = self.m_testutil.firstReferencePageArray()
     _txdata_count = len(txdata_array)
     
@@ -417,7 +433,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     
     verbose=True
-    write_data = False
+    write_data = True
     self.m_single_valued_failure=0
     
     eeprom_unlocked=False
@@ -517,7 +533,22 @@ class promiraSpiTestApp(usertest.SwUserTest):
   
   
   
+    if write_data and (not eeprom_unlocked):
+      eeprom_unlocked=self.m_eepromAPI.unlockDevice()
+      if not eeprom_unlocked:
+        self.m_testutil.fatalError("Eeprom Write Failed")
+
+    '''
+    write data pattern to entire eeprom
+    '''
+    if write_data and eeprom_unlocked:
+
+      self.m_spiio.resetClkKHz(25000)
+      device_byte_size=int(memsize_MB*1024*1024)
+      self.writeDevicePattern(0, device_byte_size, device_byte_size)
   
+    #if verbose and first_loop:
+    #  self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
     
     
     hispeed_control     = self.SubtestControl(test_selected=control.read_hispeed_single_iowidth,
@@ -600,15 +631,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
               continue
             
             self.m_testutil.traceEchoOff()
-      
-            if write_data and (not eeprom_unlocked):
-              eeprom_unlocked=self.m_eepromAPI.unlockDevice()
-              
-            if write_data:
-              self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, txdata_array)
-      
-            #if verbose and first_loop:
-            #  self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
+
+
+          
+
       
                         
             '''
@@ -641,6 +667,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
                   subtest_monitor.enterResult(test_pass)
                   self.m_histogram.addData(spi_parameters.clk_kHz, test_pass, errors, single_valued)
                   
+                  if not test_pass and single_valued and spi_parameters.clk_kHz <= 20000:
+                    self.m_spiio.signalEvent()
+                    pass
+                  
                   self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
                   self.m_testutil.bufferDetailInfo("subtest iteration #"+str(subtest_monitor.resultCount())+" of " +
                                                    str(subtest_monitor.maxTrials())+" failed")
@@ -672,8 +702,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
             
 
           except self.m_spiio.PromiraError as e:
-            print(e)
-            self.m_histogram.addFault(spi_parameters.clk_kHz, e[0], e[1])
+            e_string="%s" % e
+            parts=e_string.split(':')
+            self.m_histogram.addFault(spi_parameters.clk_kHz, parts[0], parts[1], parts[2])
             self.m_testutil.dumpTraceBuffer()
             self.m_spiio.devResetOpen()
             retries-=1
@@ -689,6 +720,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
         self.m_testutil.bufferDetailInfo("Total Single Valued Failures = %s" % self.m_single_valued_failure, True)
 
       self.m_histogram.dumpHistogram()
+      self.m_histogram.dumpFaultHistory()
 
 
       if control.use_auto_vernier and auto_vernier_cycle_count>control.auto_vernier_soak_cycles:

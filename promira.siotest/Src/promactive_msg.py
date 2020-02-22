@@ -2,7 +2,7 @@ import promact_is_py as pmact
 import collections 
 import sys
 
-class promactMessages:
+class promactMessages(object):
   
 
       
@@ -86,7 +86,7 @@ class promactMessages:
                         pmact.PS_GPIO_CMD_CHANGE, pmact.PS_GPIO_CMD_DELAY_MS,
                         pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT ]
   
-  def __init_(self):
+  def __init__(self):
     pass
 
   def fatalError(self, reason):
