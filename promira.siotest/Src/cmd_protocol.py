@@ -573,5 +573,6 @@ def precedentCmdSpec(spi_cmd):
       if cmdspec.iowMax==iomode:
         return cmdspec
   
-  testUtil().fatalError("io mode forbidden")
+  testutil=testutil.testUtil()
+  testutil.fatalError("io mode forbidden")
 

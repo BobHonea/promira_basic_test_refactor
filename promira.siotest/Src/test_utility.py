@@ -6,6 +6,8 @@ import array
 import math
 import time
 from _random import Random
+from detect import num
+
 
 
 
@@ -272,18 +274,127 @@ class testUtil:
     pass
   
 
-  pattern_index=0
+  class pagePatternGenerator(object):
+    m_index             = None
+    m_recurrence_page   = None
+    m_page_size         = None
+    m_max_value         = None
+    m_max_index         = None
+    m_frequency_1       = None
+    m_frequency_2       = None
+        
+    def __init__(self, recurrence_page, page_size, max_value):
+      self.m_index=0
+      self.m_recurrence_page=recurrence_page
+      self.m_page_size=page_size
+      self.m_max_value=max_value
+      self.m_max_index=page_size*recurrence_page
+      self.m_frequency_1=1/self.m_max_index
+      self.m_frequency_2=10/page_size
+      
+    def initPatternNumber(self):
+      self.m_pattern_index=0
+    
+    def incrementIndex(self):
+      self.m_index+=1
+      if self.m_index==self.m_max_index:
+        self.m_index=0
+        
+    def nextPatternNumber(self):
+      sin_1=math.sin(2*self.m_index*math.pi*self.m_frequency_1)
+      sin_2=math.sin(2*self.m_index*math.pi*self.m_frequency_2)
+      self.incrementIndex()
+
+      num = math.sqrt(math.fabs(sin_1+sin_2)/2)
+      num = num*self.m_max_value
+      return int(num)
+  m_pattern_generator = None
+
+
+  class referenceArraySequence(object):
+    
+    def __init__(self, array_list):
+      self.m_max_index=len(array_list)-1
+      self.m_base_index=0
+      self.m_reference_index=0
+      self.m_array_size=len(array_list[0])
+      self.m_array_count=len(array_list)
+      self.m_array_list=array_list
+      self.m_sequence_byte_length=self.m_array_size*self.m_array_count
+      
+      
+    def firstIndex(self):
+      self.m_reference_index=self.m_base_index
+      return self.m_reference_index
+
+    def currentIndex(self):
+      return self.m_reference_index
+
+    def nextIndex(self):
+      self.m_reference_index+=1
+      if self.m_reference_index>self.m_max_index:
+        self.m_reference_index=self.m_base_index
+        
+    def pageSize(self):
+      return self.m_array_size
+        
+    def firstAddress(self):
+      return self.m_array_size*self.firstIndex()
+
+    def currentAddress(self):
+      return self.m_reference_index*self.m_array_size
+    
+    def nextAddress(self):
+      return self.m_array_size*self.nextIndex()
+        
+    def indexOfAddress(self, array_address):
+      return array_address//self.m_array_size
+      
+    def arrayAtIndex(self, index):
+      return self.m_array_list[index]
+      
+    def arrayAtAddress(self, array_address):
+      modaddress=array_address%self.m_sequence_byte_length
+      return self.m_array_list[self.indexOfAddress(modaddress)]
+      
+    def firstArray(self):
+      return self.arrayAtIndex(self.firstIndex())
+    
+    def currentArray(self):
+      return self.arrayAtIndex(self.currentIndex())
+    
+    def nextArray(self):
+      return self.arrayAtIndex(self.nextIndex())
+    
+    def addressForArrayIndex(self, index):
+      modindex=index%self.m_array_count
+      return modindex*self.m_array_size
+
+    def setIndex(self, index):
+      self.m_reference_index=index
+      
+    def setIndexByAddress(self, address):
+      self.m_reference_index=self.indexOfAddress(address)
+
+  '''
+  referenceArrayIndex()
+  the reference array set is finite in page-array length
+  it is written recurrently throughout the memory space
+  compute the page array index matching a memory page start address
+  '''
   
-  def patternNumber(self):
-    number=int(256*math.sin(self.pattern_index*3.141579/256))  
-    self.pattern_index+=1
-    return number
+  def referenceArrayIndex(self, start_address):
+    if start_address % 256 != 0:
+      self.fatalError("referenceArrayIndex: start_address not on page boundary")
+    return (start_address//256)%self.m_ref_array_count
     
   def generatePatternedArray(self, array_size):
+    if self.m_pattern_generator == None:
+      self.m_pattern_generator=self.pagePatternGenerator(self.m_ref_array_count, 256, 255)
+
     patterned_array=pmact.array_u08(array_size)
     for index in range(array_size):
-      patterned_array[index] = self.patternNumber()
-      
+      patterned_array[index] = self.m_pattern_generator.nextPatternNumber()
     return patterned_array
   
       
@@ -294,6 +405,8 @@ class testUtil:
         
       return rand_array
   
+  
+  
   def refArrayCount(self):
     return self.m_ref_array_count
   
@@ -301,7 +414,7 @@ class testUtil:
       self.m_ref_array_list = []
       for index in range(self.m_ref_array_count):
         if self.m_patterned_not_random_arrays:
-          this_array=self.generatePatternedArray(self.m_page_size, self.m_page_size)
+          this_array=self.generatePatternedArray(self.m_page_size)
         else:  
           this_array=self.generateRandomArray(self.m_page_size, self.m_page_size)
              

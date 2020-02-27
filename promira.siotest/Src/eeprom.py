@@ -190,15 +190,30 @@ class eepromAPI:
     return (self.m_micron_status.nv_config & mask) >> shift
     
   
-  def dtrStatus(self):
-    return not self.nvConfigStatus(0b100000, 5)
-  
-  def dualStatus(self):
+  def dualIoModeEnabled(self):
     return not self.nvConfigStatus(0b10, 1)
   
-  def quadStatus(self):
-    return not self.nvConfigStatus(0b1, 0)
+  def quadIoModeEnabled(self):
+    return not self.nvConfigStatus(0b100, 2)
   
+  def holdResetDisabled(self):
+    return self.nvConfigStatus(0b1000, 3)
+  
+  def dtrIoModeEnabled(self):
+    return not self.nvConfigStatus(0b10000, 4)
+  
+  def driverStrength(self):
+    return self.nvConfigStatus(0x0070, 5)
+
+  def xipIoMode(self):
+    return self.nvConfigStatus(0x0f00, 8)
+    
+  def dummyCycles(self):
+    cycle_code=self.nvConfigStatus(0xf000, 12)
+    if cycle_code == 0xf:
+      cycle_code = 0
+    return cycle_code
+    
   def readMicronStatusRegisters(self):
     if self.m_devconfig.mfgr!='Micron':
       self.m_testutil.fatalError("Micron Tech. Devices Only")

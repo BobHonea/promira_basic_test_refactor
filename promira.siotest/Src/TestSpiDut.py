@@ -68,6 +68,8 @@ from cmd_protocol import RVCFG
 #from result_histogram import result2DHistogram
 #from error_histogram import parameterizedErrorHistogram
 from err_fault_histogram import parameterizedErrorHistogram
+from promact_is_py import array_u08
+from lib2to3.pgen2 import driver
 
 
 
@@ -164,29 +166,39 @@ class promiraSpiTestApp(usertest.SwUserTest):
     return False
   
   
-  def writeDevicePattern(self, start_page_address, length, device_byte_size):
+  def writeDevicePattern(self, start_page_address, length, array_sequence, verify=False):
+    
     if start_page_address % self.m_eepromAPI.EEPROM_PAGE_SIZE != 0:
       self.m_testutil.fatalError("illegal page address")
     
     if length % self.m_eepromAPI.EEPROM_PAGE_SIZE != 0:
       self.m_testutil.fatalError("illegal page fill length")
-      
-    start_page=int(start_page_address/self.m_eepromAPI.EEPROM_PAGE_SIZE)
-    page_count=int(length/self.m_eepromAPI.EEPROM_PAGE_SIZE)
     
-    if start_page+page_count > (device_byte_size/self.m_eepromAPI.EEPROM_PAGE_SIZE):
-      self.m_testutil.fatalError("write request too large")
-      
-    pattern_array=self.m_testutil.firstReferencePageArray()
-    for page in range(page_count):
-      page_address=start_page_address+(page * self.m_eepromAPI.EEPROM_PAGE_SIZE)
+    last_write_index=(length/array_sequence.pageSize())
+    
+    array_sequence.setIndexByAddress(start_page_address)
+    page_address=start_page_address
+    write_index=0
+    
+    while write_index < last_write_index: 
+         
+      page_address=start_page_address+(write_index * array_sequence.pageSize())
+      pattern_array=array_sequence.arrayAtAddress(page_address)
+      if verify:
+        rxdata_array=array_u08(array_sequence.pageSize())
+
       
       # need to catch promira adapter faults
       # 
       try_count=0
       while try_count < 3:
         try:
-          self.m_eepromAPI.updateWithinPage(page_address, eepromAPI.EEPROM_PAGE_SIZE, pattern_array)
+          self.m_eepromAPI.updateWithinPage(page_address, array_sequence.pageSize(), pattern_array)
+          if verify:
+            self.m_eepromAPI.readData(page_address, array_sequence.pageSize(), rxdata_array)
+            if not self.m_testutil.arraysMatch(pattern_array, rxdata_array):
+              self.m_testutil.fatalError("writeDevicePattern(): write/verify failed")
+              
           break
         
         except self.m_spiio.PromiraError as e:
@@ -195,7 +207,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
           self.m_spiio.devResetOpen()
           try_count+=1
           
-      pattern_array=self.m_testutil.nextReferencePageArray()
+      write_index+=1
+      array_sequence.nextIndex()
         
   
   def readTest(self, read_cmd_byte, cmd_namestring, address, length, pattern_array, verbose):
@@ -385,8 +398,15 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
   def runTest(self):
     
+    '''
+    test_array sequence based on 
+    '''
+    self.m_testutil.buildPageArrays() 
+    pattern_array_sequence=self.m_testutil.referenceArraySequence(self.m_testutil.m_ref_array_list)    
 
-
+    verbose=True
+    write_data = True
+    
     enable_single_iowidth_read    = True
     enable_hs_single_iowidth_read = False
     enable_dual_iowidth_read      = False
@@ -422,22 +442,15 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
 
     
-    self.m_testutil.buildPageArrays() 
-    txdata_array = self.m_testutil.firstReferencePageArray()
-    _txdata_count = len(txdata_array)
-    
-    self.m_testutil.printArrayHexDump("Reference Array", txdata_array, True)
+
 
     '''
     flags control test loop contents
     '''
     
-    verbose=True
-    write_data = True
-    self.m_single_valued_failure=0
-    
-    eeprom_unlocked=False
 
+    self.m_single_valued_failure=0
+    eeprom_unlocked=False
     auto_vernier_cycle_count=0
 
     
@@ -512,18 +525,36 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_testutil.bufferDetailInfo("EEPROM Type: "+ mfgrname + " "+ chipname, True )
     self.m_testutil.bufferDetailInfo("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V", True)
 
-    if mfgrname=='Micron':
+    if mfgrname.upper() in ['MICRON', 'GOOGLE']:
       micronstatus=self.m_eepromAPI.readMicronStatusRegisters()
       self.m_testutil.bufferTraceInfo(repr(micronstatus), True)
       
-      dtr_status=not self.m_eepromAPI.dtrStatus()
-      dual_status=not self.m_eepromAPI.dualStatus()
-      quad_status=not self.m_eepromAPI.quadStatus()
+      dtr_iomode_enabled=self.m_eepromAPI.dtrIoModeEnabled()
+      dual_iomode_enabled=self.m_eepromAPI.dualIoModeEnabled()
+      quad_iomode_enabled=self.m_eepromAPI.quadIoModeEnabled()
+      hold_reset_enabled=not self.m_eepromAPI.holdResetDisabled()
+      xip_iomode=self.m_eepromAPI.xipIoMode()
+      driver_strength=self.m_eepromAPI.driverStrength()
+      dummy_cycles_code=self.m_eepromAPI.dummyCycles()
+      
+      self.m_testutil.bufferDetailInfo("NVCONFIG REGISTER VALUES")
+      self.m_testutil.bufferDetailInfo("DTR IoMode: "+str(dtr_iomode_enabled)+
+                                       "   Dual IoMode: "+str(dual_iomode_enabled)+
+                                       "   Quad IoMode: "+str(quad_iomode_enabled),
+                                       True)
+      self.m_testutil.bufferDetailInfo("HoldReset: "+str(hold_reset_enabled)+
+                                       "   Xip: "+str(xip_iomode)+
+                                       "   Driver Strength: "+ str(driver_strength),
+                                       True)
     
-      self.m_testutil.bufferDetailInfo("DTR: "+str(dtr_status)+"   Dual I/O: "+str(dual_status)+ "   Quad: "+str(quad_status))
     
-    page_address=spi_parameters.address_base+0x1000
-    
+      if dummy_cycles_code==0:
+        cycles='DEFAULT'
+      else:
+        cycles = str(dummy_cycles_code)
+        
+      self.m_testutil.bufferDetailInfo("Dummy Cycles configured to "+ cycles,
+                                        True)
     '''
     lock printed data up to this point into Trace Buffer
     it will never be flushed.
@@ -543,10 +574,30 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     if write_data and eeprom_unlocked:
 
-      self.m_spiio.resetClkKHz(25000)
+      self.m_spiio.resetClkKHz(2000)
+      pattern_start_byte_address=0
+      ### OVERRIDE
+      save_memsize_MB=memsize_MB
+      memsize_MB=0.25
+      ### OVERRIDE
+
       device_byte_size=int(memsize_MB*1024*1024)
-      self.writeDevicePattern(0, device_byte_size, device_byte_size)
-  
+      quarter_megabyte_size=int(0.25*1024*1024)
+      total_quarter_megabytes=device_byte_size//quarter_megabyte_size
+      
+      #undo OVERRIDE
+      memsize_MB=save_memsize_MB
+      #undo OVERRIDE
+      '''
+      perform VERIFIED write of entire eeprom
+      '''
+      for quarter_megabyte in range(total_quarter_megabytes):
+        pattern_start_byte_address=int(quarter_megabyte*quarter_megabyte_size)
+        pattern_end_byte_address=pattern_start_byte_address+quarter_megabyte_size-1
+        self.writeDevicePattern(pattern_start_byte_address, quarter_megabyte_size, pattern_array_sequence, True)
+        print("Write Complete [x%08x to x%08x]" % ( pattern_start_byte_address, pattern_end_byte_address ))
+
+      print("Device Pattern Write Complete!")
     #if verbose and first_loop:
     #  self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
     
@@ -598,6 +649,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
         #self.m_testutil.bufferDisplayInfo("Testing config #%03d of %03d" % (config_list.index(spi_parameters), len(config_list)) )
         retries=2
         one_config_test_complete=False
+        
+        
         while not one_config_test_complete: 
           #configuration test loop       
           try:
@@ -614,8 +667,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
             time.sleep(.01)
             clock_kHz=spi_parameters.clk_kHz
       
-      
-      
+            pattern_array_sequence.setIndex(0)
+            sector_address=pattern_array_sequence.firstAddress()
                   
             '''
             check to see that power is appropriate for the target
@@ -659,13 +712,14 @@ class promiraSpiTestApp(usertest.SwUserTest):
                   #sub-battery subtest test level
                   test_pass, errors, single_valued =self.readTest( subtest_command,
                                                                    subtest_name,
-                                                                   page_address,
+                                                                   pattern_array_sequence.currentAddress(),
                                                                    self.m_eepromAPI.EEPROM_PAGE_SIZE,
-                                                                   txdata_array,
+                                                                   pattern_array_sequence.currentArray(),
                                                                    False)
                   
                   subtest_monitor.enterResult(test_pass)
                   self.m_histogram.addData(spi_parameters.clk_kHz, test_pass, errors, single_valued)
+                  pattern_array_sequence.nextIndex()
                   
                   if not test_pass and single_valued and spi_parameters.clk_kHz <= 20000:
                     self.m_spiio.signalEvent()

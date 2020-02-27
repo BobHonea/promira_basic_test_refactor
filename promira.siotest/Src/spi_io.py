@@ -31,7 +31,7 @@ class spiIO:
   m_device_status   = None
 
   
-  m_spi_clock_khz   = None
+  m_spi_clock_kHz   = None
   m_spi_clock_mode  = None
   m_spi_ss_polarity = None
   
@@ -150,10 +150,10 @@ class spiIO:
                                                   pmact.PS_MODULE_ID_SPI_ACTIVE)
     pmact.ps_queue_clear(signal_queue)
     pmact.ps_queue_spi_oe(signal_queue, 0x01)
-    for _ndx in range(3):
-      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 2048, 0x99)
-      pmact.ps_queue_delay_ms(signal_queue, 1000)
-      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 2048, 0xFF)
+    for _ndx in range(2):
+      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 32, 0x99)
+      pmact.ps_queue_delay_ms(signal_queue, 10)
+      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 32, 0xFF)
     pmact.ps_queue_spi_oe(signal_queue, 0x00)
         
     self.m_in_signal_event=True
@@ -684,6 +684,7 @@ class spiIO:
 
       if iotype==protocol.IOTYPE_WRITE:
         # append valid buffer bytes to pending data_out
+        pmact.ps_queue_spi_delay_cycles(session_queue, 32)        
         pmact.ps_queue_spi_write(session_queue,
                                  phase.mode,
                                  8,
