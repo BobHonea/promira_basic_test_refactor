@@ -7,6 +7,147 @@ import spi_io as spiio
 import cmd_protocol as protocol
 import eeprom_devices
 
+
+
+KB4 = 0x1000
+KB8 = 0x2000
+KB32 = 0x8000
+KB64 = 0x10000
+# 4 8KB BLOCKS FROM ADDRESS 0
+# 1 32KB BLOCKS FROM ADDRESS 0x8000
+# 32 64KB BLOCKS FROM ADDRESS 0x10000
+# 1 32BLOCK FROM ADDRESS 0x3F0000
+# 4 8KB BLOCKS FROM ADDRESS 0x3F8000
+
+MEM_BLOCKSIZE = 0
+MEM_BLOCKCOUNT = 1
+
+PWR_3_3V = 3.3
+PWR_1_8V = 1.8
+
+
+MICROCHIP_EEPROM_BLOCKS = [
+              [KB8, 4],
+              [KB32, 1],
+              [KB64, 31],
+              [KB32, 1],
+              [KB8, 4] ]
+
+MICRON_EEPROM_BLOCKS = [
+             [KB32, 512]]
+
+'''
+sectorSet()
+  manage data about eeprom sectors.
+  1. sector addresses
+  2. sector sizes
+  3. sector writable
+  4. sector accessibility
+'''
+import collections as coll
+SECSTAT_UNKNOWN       = 0
+SECSTAT_UNLOCK        = 1
+SECSTAT_RDLOCK        = 2
+SECSTAT_WRLOCK        = 4
+SECSTAT_RWLOCK        = 6
+
+VALID_SECSTAT=[SECSTAT_UNKNOWN, SECSTAT_UNLOCK, SECSTAT_RDLOCK, SECSTAT_WRLOCK, SECSTAT_WRLOCK]
+
+WRITESTAT_UNKNOWN     = 0
+WRITESTAT_UNERASED    = 1
+WRITESTAT_ERASED      = 2
+
+VALID_WRITESTAT = [ WRITESTAT_UNKNOWN, WRITESTAT_UNERASED, WRITESTAT_ERASED]
+
+'''
+Submit Sector Map to sectorSet():
+  1. address:      sectors listed in increasing address order
+  2. size:         no gaps in memory space between sectors
+  3. write_status: 
+'''
+MemoryMap = coll.namedtuple('MemoryMap', 'address size write_status block_index')
+BlockMap = coll.namedtuple('BlockMap', 'address size, sectors')
+
+class deviceMap(object):
+  m_sector_map    = None
+  m_block_map     = None
+  m_sector_count  = None
+  m_total_size    = None
+  m_valid         = None
+  m_base_address  = None
+  
+  
+  def fatalError(self, reason):
+    self.m_testutil.fatalError(reason)
+    
+  def __init__(self, block_map:BlockMap):
+    
+    if ( type(block_map) == list
+         and block_map[0][0] in [ KB8, KB32, KB64]
+         and len(block_map)>0 ):
+         
+      self.m_total_size   = 0
+      self.m_block_map    = block_map
+      self.m_sector_map   = []
+      sector_count        = 0
+      block_address       = 0
+      
+      for block_ndx in range(len(block_map)):
+        blockinfo=block_map[block_ndx]
+        block_size = blockinfo[0]
+        sector_count = blockinfo[1]
+        
+        blockmap=BlockMap(address=block_address, size=block_size, sectors=sector_count)
+        self.m_block_map.append(blockmap)
+        
+        sector_address = block_address
+        
+        for _sec_ndx in range(sector_count):
+         
+          sector_map=MemoryMap(address=sector_address, size=KB4, write_status=WRITESTAT_UNKNOWN, block_index=block_ndx)
+
+          self.m_sector_map.append(sector_map)
+          sector_address=sector_map.address+sector_map.size
+          self.m_total_size+=sector_map.size
+  
+        block_address = block_address + block_size
+        
+      self.m_valid=self.m_total_size>0 and self.m_sector_count>0
+      
+      if self.m_valid!=True:
+        self.m_testutil.fatalError("invalid sector_map")
+
+  def valid(self):
+    return self.m_valid
+  
+  def mapIndex(self, address):
+    for index in range(len(self.m_sector_map)):
+      map=self.m_sector_map[index]
+      if (map.address_base <= address
+          and (map.address_base+map.size) > address):
+        return index
+
+  def sectorMap(self, address):
+    return self.m_sector_map[self.mapIndex(address)]
+  
+  def Address(self, address):
+    return self.m_sector_map[self.mapIndex(address)].address
+  
+  def size(self, address):
+    return self.m_sector_map[self.mapIndex(address)].size
+  
+  def writeStatus(self, address):
+    return self.m_sector_map[self.mapIndex(address)].write_status
+  
+  def securityStatus(self, address):
+    return self.m_sector_map[self.mapIndex(address)].security_status
+
+def globalUnlock(self):
+  spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_ULBPR)
+  return spi_result.success
+  
+  self.m_testutil.fatalError("SpiGlobalUnlock error")
+
 class eepromAPI:
   
   EEPROM_PROTECT_BITMAP_SIZE = 18
@@ -14,37 +155,8 @@ class eepromAPI:
   EEPROM_SECTOR_SIZE = 0x1000
   EEPROM_SIZE = 0x400000
   
-  KB8 = 0x2000
-  KB32 = 0x8000
-  KB64 = 0x10000
-  # 4 8KB BLOCKS FROM ADDRESS 0
-  # 1 32KB BLOCKS FROM ADDRESS 0x8000
-  # 32 64KB BLOCKS FROM ADDRESS 0x10000
-  # 1 32BLOCK FROM ADDRESS 0x3F0000
-  # 4 8KB BLOCKS FROM ADDRESS 0x3F8000
-  
-  MEM_ADDRESS = 0
-  MEM_BLOCKSIZE = 1
-  MEM_BLOCKCOUNT = 2
 
-
-  
-  PWR_3_3V = 3.3
-  PWR_1_8V = 1.8
-
-  
-
-
-            
-               
-  EEPROM_BLOCKS = [[0x0, KB8, 4],
-                 [0x8000, KB32, 1],
-                 [0x10000, KB64, 31],
-                 [0x3F0000, KB32, 1],
-                 [0x3F8000, KB8, 4],
-                 [0x400000, 0, 0]]
-  
-  ENUMERATED_BLOCKS = []
+              
 
   
  
@@ -65,17 +177,18 @@ class eepromAPI:
   '''
   EESTATUS_READ_ERROR = 0x8000
   
-  m_testutil  = None
-  m_jedec_id  = None
-  m_devconfig = None
-  m_spiio     = None
+  m_testutil      = None
+  m_jedec_id      = None
+  m_device_map    = None
+  m_devconfig     = None
+  m_spiio         = None
   m_micron_status = None
 
   
   def __init__(self):
     self.m_testutil     = testutil.testUtil()
     self.m_spiio        = spiio.spiIO()
-    self.enumerateBlocks()
+
 
 
   
@@ -86,22 +199,7 @@ class eepromAPI:
   def configure(self):
     self.testJedec()
     
-    
-  def enumerateBlocks(self):
-    for blockset in self.EEPROM_BLOCKS:
-      address = blockset[0]
-      if address == self.EEPROM_SIZE:
-        break;
-      blocksize = blockset[1]
-      blockcount = blockset[2]
-      enumeration_address = address
-      
-      for _index in range(blockcount):
-        self.ENUMERATED_BLOCKS.append([enumeration_address, blocksize])
-        enumeration_address += blocksize
-        pass
-      pass
-    return
+
   
   def doJedecTest(self, cmd_byte):  
     rxdata_array=array.ArrayType('B', [0]*3)
@@ -310,6 +408,15 @@ class eepromAPI:
     spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SE, sector_address)
     return spi_result.success
 
+  def eraseBlock(self, sector_address):
+    if (sector_address & ~(self.EEPROM_SECTOR_SIZE-1)) != sector_address:
+      self.m_testutil.fatalError("sector address error")
+
+    self.waitUntilNotBusy()
+          
+
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_BE, sector_address)
+    return spi_result.success
       
   def updateWithinPage(self, write_address, write_length, write_array):
     # Update one page per function use
@@ -350,12 +457,6 @@ class eepromAPI:
     result_length=spi_result.xfer_length
     return (result_length == write_length)
 
-
-  def globalUnlock(self):
-    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_ULBPR)
-    return spi_result.success
-    
-    self.m_testutil.fatalError("SpiGlobalUnlock error")
   
   
   def writeBlockProtectBitmap(self):

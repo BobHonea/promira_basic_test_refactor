@@ -57,7 +57,8 @@ from __future__ import division, with_statement, print_function
 #==========================================================================
 import usertest
 import promact_is_py as pmact
-from eeprom import eepromAPI
+from eeprom import eepromAPI, deviceMap, MICROCHIP_EEPROM_BLOCKS,\
+  MICRON_EEPROM_BLOCKS
 import cmd_protocol as protocol
 import spi_cfg_mgr as spicfg
 import test_utility as testutil
@@ -69,7 +70,7 @@ from cmd_protocol import RVCFG
 #from error_histogram import parameterizedErrorHistogram
 from err_fault_histogram import parameterizedErrorHistogram
 from promact_is_py import array_u08
-from lib2to3.pgen2 import driver
+
 
 
 
@@ -405,7 +406,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     pattern_array_sequence=self.m_testutil.referenceArraySequence(self.m_testutil.m_ref_array_list)    
 
     verbose=True
-    write_data = True
+    write_data = False
     
     enable_single_iowidth_read    = True
     enable_hs_single_iowidth_read = False
@@ -522,6 +523,14 @@ class promiraSpiTestApp(usertest.SwUserTest):
     mfgrname=eepromConfig.mfgr
     chipname=eepromConfig.chip_type
     memsize_MB=eepromConfig.memsize/(1024*1024)
+    if mfgrname.upper() == 'MICRON':
+      device_map=deviceMap(MICRON_EEPROM_BLOCKS)
+    elif mfgrname.upper() == 'MICROCHIP':
+      device_map=deviceMap(MICROCHIP_EEPROM_BLOCKS)
+    else:
+      self.m_testutil.fatalError("Unrecognized EEPROM")
+
+      
     self.m_testutil.bufferDetailInfo("EEPROM Type: "+ mfgrname + " "+ chipname, True )
     self.m_testutil.bufferDetailInfo("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V", True)
 
@@ -577,24 +586,25 @@ class promiraSpiTestApp(usertest.SwUserTest):
       self.m_spiio.resetClkKHz(2000)
       pattern_start_byte_address=0
       ### OVERRIDE
-      save_memsize_MB=memsize_MB
-      memsize_MB=0.25
+      #program_memsize_MB=memsize_MB
+      program_memsize_MB=memsize_MB/1024
       ### OVERRIDE
-
-      device_byte_size=int(memsize_MB*1024*1024)
-      quarter_megabyte_size=int(0.25*1024*1024)
-      total_quarter_megabytes=device_byte_size//quarter_megabyte_size
       
-      #undo OVERRIDE
-      memsize_MB=save_memsize_MB
-      #undo OVERRIDE
+
+      program_byte_size=int(program_memsize_MB*1024*1024)
+      program_block_size=int(program_byte_size/16)
+      if program_block_size<256:
+          self.m_testutil.fatalError("program block size < 256")
+          
+      program_block_count=program_byte_size//program_block_size
+      
       '''
       perform VERIFIED write of entire eeprom
       '''
-      for quarter_megabyte in range(total_quarter_megabytes):
-        pattern_start_byte_address=int(quarter_megabyte*quarter_megabyte_size)
-        pattern_end_byte_address=pattern_start_byte_address+quarter_megabyte_size-1
-        self.writeDevicePattern(pattern_start_byte_address, quarter_megabyte_size, pattern_array_sequence, True)
+      for program_block in range(program_block_count):
+        pattern_start_byte_address=int(program_block*program_block_size)
+        pattern_end_byte_address=pattern_start_byte_address+program_block_size-1
+        self.writeDevicePattern(pattern_start_byte_address, program_block_size, pattern_array_sequence, True)
         print("Write Complete [x%08x to x%08x]" % ( pattern_start_byte_address, pattern_end_byte_address ))
 
       print("Device Pattern Write Complete!")
