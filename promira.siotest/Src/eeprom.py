@@ -6,15 +6,17 @@ import promact_is_py as pmact
 import spi_io as spiio
 import cmd_protocol as protocol
 import eeprom_devices
+import eeprom_map
+from eeprom_map import WRITESTAT_ERASED
+
+
+
+PWR_3_3V = 3.3
+PWR_1_8V = 1.8
 
 
 
 
-def globalUnlock(self):
-  spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_ULBPR)
-  return spi_result.success
-  
-  self.m_testutil.fatalError("SpiGlobalUnlock error")
 
 class eepromAPI:
   
@@ -59,6 +61,7 @@ class eepromAPI:
 
 
 
+
   
   def getobjectSpiIO(self):
     return self.m_spiio
@@ -66,15 +69,105 @@ class eepromAPI:
   
   def configure(self):
     self.testJedec()
-    
 
+    mfgrname=self.m_devconfig.mfgr
+    #chipname=self.m_devconfig.chip_type
+    #memsize_MB=self.m_devconfig.memsize/(1024*1024)
+    if mfgrname.upper() == 'MICRON':
+      self.m_device_map=eeprom_map.deviceMap(eeprom_map.MICRON_EEPROM_BLOCKS)
+    elif mfgrname.upper() == 'MICROCHIP':
+      self.m_device_map=eeprom_map.deviceMap(eeprom_map.MICROCHIP_EEPROM_BLOCKS)
+    else:
+      self.m_testutil.fatalError("Unrecognized EEPROM")
+    
+    self.m_testutil.bufferDetailInfo("Block/Sector Maps for %s initialized" % mfgrname, True)  
+    
   
+  '''
+  doMapTest
+    1. Set Status to Erased
+  '''  
+  def doMapTest(self):
+    
+    round_one_page_indices=[1, 14, 3, 5, 7, 8, 10, 12]
+    
+    # 1. Set Status to Erased
+    self.m_device_map.setDeviceWriteStatus(eeprom_map.WRITESTAT_ERASED)
+    
+    # 2. Test Erased Status
+    address=0
+    while address < self.m_device_map.deviceBytes():
+      block_map=self.m_device_map.addressedBlockMap(address)
+      if self.m_device_map.blockWriteStatus(address)==WRITESTAT_ERASED:
+        address=block_map.address+block_map.size
+        continue
+      
+      self.m_testutil.fatalError("doMapTest() Fail - ERASED status test")
+      
+      
+    #3. Make status MIXED
+    block_address=0
+    while block_address < self.m_device_map.deviceBytes():
+      block_map=self.m_device_map.addressedBlockMap(block_address)
+      sector_range=range(block_map.base_sector_index, block_map.base_sector_index+block_map.sectors)
+
+      for sector_index in sector_range:
+        sector_map=self.m_device_map.indexedSectorMap(sector_index)
+        sector_address=sector_map.address
+        
+        for page_index in round_one_page_indices:
+          page_address=sector_address+(page_index*eeprom_map.PAGE_SIZE)
+          self.m_device_map.setPageDirty(page_address)
+          
+
+      if self.m_device_map.blockWriteStatus(block_address)==eeprom_map.WRITESTAT_MIXED:
+        block_address=block_map.address+block_map.size
+      else:
+        self.m_testutil.fatalError("doMapTest() Fail - MIXED status test")
+
+    #4. make status WRITTEN
+    block_address=0
+    while block_address < self.m_device_map.deviceBytes():
+      block_map=self.m_device_map.addressedBlockMap(block_address)
+      for sector_subindex in range(block_map.sectors):
+        sector_index=block_map.base_sector_index+sector_subindex
+        sector_map=self.m_device_map.indexedSectorMap(sector_index)
+        sector_address=sector_map.address
+        
+        for page_index in range(16):
+          if page_index not in round_one_page_indices:
+            page_address=sector_address+(page_index*eeprom_map.PAGE_SIZE)
+            self.m_device_map.setPageDirty(page_address)
+            
+        if self.m_device_map.sectorWriteStatus(sector_address)!=eeprom_map.WRITESTAT_WRITTEN:
+          self.m_testutil.fatalError("doMapTest Fail - Sector WRITTEN status Test")
+          
+
+      if self.m_device_map.blockWriteStatus(block_address)==eeprom_map.WRITESTAT_WRITTEN:
+        block_address=block_map.address+block_map.size
+      else:
+        self.m_testutil.fatalError("doMapTest() Fail - Block WRITTEN status test")
+    
+    #5. Check Sector Status as Written
+ 
+    sector_address=0  
+    while sector_address < self.m_device_map.deviceBytes():
+      sector_map=self.m_device_map.sectorMap(sector_address)
+      
+      if self.m_device_map.sectorWriteStatus(sector_address)== eeprom_map.WRITESTAT_WRITTEN:
+        sector_address=sector_map.address+sector_map.size
+        continue
+      
+      self.m_testutil.fatalError("doMapTest() Fail - Sector WRITTEN status test")
+      
+      
+    
+      
   def doJedecTest(self, cmd_byte):  
     rxdata_array=array.ArrayType('B', [0]*3)
     spi_result = self.m_spiio.spiMasterMultimodeCmd(cmd_byte, None, 3, rxdata_array)
     if spi_result.xfer_length != 3:
-      print("error: jedec read")
-      sys.exit()
+      self.m_testutil.fatalError("error: jedec read")
 
     return self.devConfigDefined(rxdata_array.tolist())
   
@@ -266,24 +359,31 @@ class eepromAPI:
     else:
       self.m_testutil.fatalError("Unsupported Bitmap Array Size")
 
-  def eraseSector(self, sector_address):
-    if (sector_address & ~(self.EEPROM_SECTOR_SIZE-1)) != sector_address:
-      self.m_testutil.fatalError("sector address error")
-
+  def eraseSector(self, address):
+    if self.m_device_map.sectorWriteStatus(address) == eeprom_map.WRITESTAT_ERASED:
+      return True
+    
     self.waitUntilNotBusy()
-          
-
+    sector_address=self.m_device_map.sectorAddress(address)
     spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SE, sector_address)
+
+    if spi_result.success:
+      self.m_device_map.setSectorWriteStatus(sector_address, eeprom_map.WRITESTAT_ERASED)
+      
     return spi_result.success
 
-  def eraseBlock(self, sector_address):
-    if (sector_address & ~(self.EEPROM_SECTOR_SIZE-1)) != sector_address:
-      self.m_testutil.fatalError("sector address error")
 
+  def eraseBlock(self, address):
+    if self.m_device_map.blockWriteStatus(address) == eeprom_map.WRITESTAT_ERASED:
+      return True
+    
+    block_address = self.m_device_map.blockAddress(address)
     self.waitUntilNotBusy()
           
-
-    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_BE, sector_address)
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_BE, block_address)
+    if spi_result.success:
+      self.m_device_map.setBlockWriteStatus(block_address, eeprom_map.WRITESTAT_ERASED)
+      
     return spi_result.success
       
   def updateWithinPage(self, write_address, write_length, write_array):
@@ -292,15 +392,14 @@ class eepromAPI:
     # Proves erase-before-write works, but NOT EFFICIENT
     
     # Page level checks
-    start_page = write_address // self.EEPROM_PAGE_SIZE
-    end_page = (write_address + (write_length - 1)) // self.EEPROM_PAGE_SIZE
+    start_page = self.m_device_map.pageAddress(write_address)
+    end_page = self.m_device_map.pageAddress(write_address+write_length-1)
     if start_page != end_page:
       self.m_testutil.fatalError("Page Write Spans Pages")
       
     # Sector level check & Sector Erase + Page Write
-    sector_size_mask = self.EEPROM_SECTOR_SIZE - 1
-    sector_address = write_address & ~sector_size_mask
-    sector_offset = write_address & sector_size_mask
+    
+    sector_address = self.m_device_map.sectorAddress(write_address)
     
     if self.eraseSector(sector_address) == False:
       return False
@@ -313,8 +412,8 @@ class eepromAPI:
   
   def writeWithinPage(self, write_address, write_length, write_array):
     # Update one page per function use
-    start_page = write_address // self.EEPROM_PAGE_SIZE
-    end_page = (write_address + (write_length - 1)) // self.EEPROM_PAGE_SIZE
+    start_page = self.m_device_map.pageAddress(write_address)
+    end_page = self.m_device_map.pageAddress(write_address+write_length-1)
     if start_page != end_page:
       self.m_testutil.fatalError("Page Write Spans Pages")
 
@@ -322,6 +421,8 @@ class eepromAPI:
     
     spi_result =self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_PP,
                                                          write_address, write_length, write_array)
+    
+    self.m_device_map.setSectorWriteStatus(write_address, eeprom_map.WRITESTAT_WRITTEN)
     result_length=spi_result.xfer_length
     return (result_length == write_length)
 
@@ -355,6 +456,12 @@ class eepromAPI:
       
     return True
 
+  def globalUnlock(self):
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_ULBPR)
+    return spi_result.success
+    
+    self.m_testutil.fatalError("SpiGlobalUnlock error")
+  
   def unlockMicrochipDevice(self):
 
     debug=False

@@ -57,8 +57,8 @@ from __future__ import division, with_statement, print_function
 #==========================================================================
 import usertest
 import promact_is_py as pmact
-from eeprom import eepromAPI, deviceMap, MICROCHIP_EEPROM_BLOCKS,\
-  MICRON_EEPROM_BLOCKS
+from eeprom import eepromAPI
+import eeprom_map
 import cmd_protocol as protocol
 import spi_cfg_mgr as spicfg
 import test_utility as testutil
@@ -406,7 +406,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     pattern_array_sequence=self.m_testutil.referenceArraySequence(self.m_testutil.m_ref_array_list)    
 
     verbose=True
-    write_data = False
+    write_data = True
     
     enable_single_iowidth_read    = True
     enable_hs_single_iowidth_read = False
@@ -515,7 +515,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
     hardsetTgtEEPROM().    
     '''
     
-    self.m_eepromAPI.testJedec()
+    self.m_eepromAPI.configure()
+    self.m_eepromAPI.doMapTest()
+    
     eepromConfig= self.m_eepromAPI.m_devconfig
     if self.m_testutil.traceEnabled():
       self.m_testutil.bufferTraceInfo(repr(eepromConfig), True)
@@ -523,14 +525,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
     mfgrname=eepromConfig.mfgr
     chipname=eepromConfig.chip_type
     memsize_MB=eepromConfig.memsize/(1024*1024)
-    if mfgrname.upper() == 'MICRON':
-      device_map=deviceMap(MICRON_EEPROM_BLOCKS)
-    elif mfgrname.upper() == 'MICROCHIP':
-      device_map=deviceMap(MICROCHIP_EEPROM_BLOCKS)
-    else:
-      self.m_testutil.fatalError("Unrecognized EEPROM")
 
-      
+
+
     self.m_testutil.bufferDetailInfo("EEPROM Type: "+ mfgrname + " "+ chipname, True )
     self.m_testutil.bufferDetailInfo("Memory Size = " + str(memsize_MB) +"   Voltage= "+ str(eepromConfig.vdd)+"V", True)
 

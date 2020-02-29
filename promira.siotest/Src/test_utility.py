@@ -542,7 +542,11 @@ class testUtil:
         
   pass
  
-  def arraySingleValued(self, array_a):
+  def arraySingleValued(self, array_a, value=None):
+    
+    if value!=None and array_a[0]!=value:
+        return False
+      
     byte_0=array_a[0]
     match_count=0
     
