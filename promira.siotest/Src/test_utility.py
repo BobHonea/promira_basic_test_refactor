@@ -1,15 +1,26 @@
 import random
 import sys
-import promact_is_py as pmact
-from spi_io import spiIO
+
 import array
 import math
 import time
 from _random import Random
-from detect import num
 
 
 
+#==========================================================================
+# HELPER FUNCTIONS
+#==========================================================================
+def array_u08 (n):  return array('B', [0]*n)
+def array_u16 (n):  return array('H', [0]*n)
+def array_u32 (n):  return array('I', [0]*n)
+def array_u64 (n):  return array('K', [0]*n)
+def array_s08 (n):  return array('b', [0]*n)
+def array_s16 (n):  return array('h', [0]*n)
+def array_s32 (n):  return array('i', [0]*n)
+def array_s64 (n):  return array('L', [0]*n)
+def array_f32 (n):  return array('f', [0]*n)
+def array_f64 (n):  return array('d', [0]*n)
 
 # A python program to create user-defined exception 
   
@@ -197,7 +208,8 @@ class testUtil:
       if self.m_trace_depth>0:
         if len(self.m_trace_buffer) >= (self.m_trace_depth+self.m_trace_protect_depth):
           self.m_trace_buffer.pop(self.m_trace_protect_depth)
-          
+      if self.m_trace_echo or echo:
+        print(string_info)
       self.m_trace_buffer.append(string_info)
   
   def flushTraceBuffer(self):
@@ -242,7 +254,7 @@ class testUtil:
 
   
   def zeroedArray(self, array_size):
-      zero_array = pmact.array_u08(array_size)
+      zero_array = array_u08(array_size)
       return zero_array
   
   def randomizeList(self, reference_list):
@@ -392,14 +404,14 @@ class testUtil:
     if self.m_pattern_generator == None:
       self.m_pattern_generator=self.pagePatternGenerator(self.m_ref_array_count, 256, 255)
 
-    patterned_array=pmact.array_u08(array_size)
+    patterned_array=array_u08(array_size)
     for index in range(array_size):
       patterned_array[index] = self.m_pattern_generator.nextPatternNumber()
     return patterned_array
   
       
   def generateRandomArray(self, array_size):
-      rand_array = pmact.array_u08(array_size)
+      rand_array = array_u08(array_size)
       for index in range(array_size):
         rand_array[index] = random.randint(0, 255)
         
@@ -412,7 +424,7 @@ class testUtil:
   
   def buildPageArrays(self):
       self.m_ref_array_list = []
-      for index in range(self.m_ref_array_count):
+      for _index in range(self.m_ref_array_count):
         if self.m_patterned_not_random_arrays:
           this_array=self.generatePatternedArray(self.m_page_size)
         else:  
@@ -527,7 +539,7 @@ class testUtil:
       line_end=line_start+bytes_per_line
       data_sub_array=data_array[line_start:line_end]
       pattern_sub_array=pattern_array[line_start:line_end]
-      pattern_match, errors =self.arraysMatch(data_sub_array, pattern_sub_array)
+      pattern_match, _errors =self.arraysMatch(data_sub_array, pattern_sub_array)
 
       if not pattern_match:
         self.bufferDetailInfo("", echo_to_display)

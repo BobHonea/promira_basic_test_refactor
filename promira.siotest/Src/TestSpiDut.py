@@ -58,14 +58,14 @@ from __future__ import division, with_statement, print_function
 import usertest
 import promact_is_py as pmact
 from eeprom import eepromAPI
-import eeprom_map
+#import eeprom_map
 import cmd_protocol as protocol
 import spi_cfg_mgr as spicfg
 import test_utility as testutil
 import promactive_msg as pmmsg 
 import time
 import collections as coll
-from cmd_protocol import RVCFG
+
 #from result_histogram import result2DHistogram
 #from error_histogram import parameterizedErrorHistogram
 from err_fault_histogram import parameterizedErrorHistogram
@@ -122,7 +122,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
     self.m_pagesize     = eepromAPI.EEPROM_PAGE_SIZE
 
-    block_protect_bitmap  = pmact.array_u08(18)
+    #block_protect_bitmap  = pmact.array_u08(18)
     self.m_rxdata_array           = pmact.array_u08(self.m_pagesize)
     self.m_txdata_array           = pmact.array_u08(self.m_pagesize)
     self.m_random_page_array      = pmact.array_u08(self.m_pagesize)

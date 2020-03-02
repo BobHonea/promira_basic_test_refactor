@@ -48,7 +48,7 @@ class parameterizedErrorHistogram(object):
         '''
         Constructor
         '''
-        m_testUtil=test_utility.testUtil()
+        self.m_testUtil=test_utility.testUtil()
         
         if len(parameter_labels)!=len(parameter_values):
           self.m_testutil.fatalError("parameter values vs. labels length mismatch")
@@ -81,7 +81,7 @@ class parameterizedErrorHistogram(object):
         e=(self.m_error_bucket_count,1)
         
         self.m_bucket_data      = np.zeros(s)
-        self.m_errors           = [ np.zeros(e) for bucket in self.m_bucket_range]
+        self.m_errors           = [ np.zeros(e) for _bucket in self.m_bucket_range]
         
 
     def errorIndex(self, error_count):
@@ -137,13 +137,13 @@ class parameterizedErrorHistogram(object):
           single_ndx=self.errorIndex(257)
           error_count_array[single_ndx]+=1
       except ValueError as e:
-        self.m_testutil.fatalError("histogram addData ValueError") 
+        self.m_testutil.fatalError("histogram addData ValueError:" + e) 
       
       finally:
         return
     
     def display(self, out_string):
-      test_utility.testUtil().bufferDisplayInfo(out_string)
+      self.m_testUtil.bufferDisplayInfo(out_string)
 
 
 
@@ -228,7 +228,7 @@ class parameterizedErrorHistogram(object):
       # width of total events is width of largest number
       self.m_number_width=len(str(self.m_event_count))
       
-      s=(0,2)
+      #s=(0,2)
       data_max_count=np.zeros(2)
       data_min_count=np.zeros(2)
       max_count_label=['','']

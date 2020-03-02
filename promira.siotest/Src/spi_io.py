@@ -202,7 +202,7 @@ class spiIO:
     pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
     
     #configure static spi parameters
-    retval=pmact.ps_spi_configure( self.m_channel_handle,
+    _retval=pmact.ps_spi_configure( self.m_channel_handle,
                             self.m_spi_clk_mode, 
                             self.m_spi_bit_order, 
                             self.m_spi_ss_polarity)
@@ -578,7 +578,7 @@ class spiIO:
           self.m_testutil.fatalError("NoneType collected")
 
           
-        result_length, _dc = self.devCollect(collect_handle)
+        _result_length, _dc = self.devCollect(collect_handle)
         pmact.ps_queue_destroy(session_queue)
         return self.SpiResult(True, None, None)
       else:

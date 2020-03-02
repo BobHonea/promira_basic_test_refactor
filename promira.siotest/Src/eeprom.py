@@ -1,13 +1,12 @@
 import array
+import collections as coll
 import test_utility as testutil
-import sys
 import promact_is_py as pmact
 
 import spi_io as spiio
 import cmd_protocol as protocol
 import eeprom_devices
 import eeprom_map
-from eeprom_map import WRITESTAT_ERASED
 
 
 
@@ -26,9 +25,6 @@ class eepromAPI:
   EEPROM_SIZE = 0x400000
   
 
-              
-
-  
  
   '''
   EESTATUS_BUSY1 and EESTATUS_W_ENABLE_LATCH are the same
@@ -82,84 +78,6 @@ class eepromAPI:
     
     self.m_testutil.bufferDetailInfo("Block/Sector Maps for %s initialized" % mfgrname, True)  
     
-  
-  '''
-  doMapTest
-    1. Set Status to Erased
-  '''  
-  def doMapTest(self):
-    
-    round_one_page_indices=[1, 14, 3, 5, 7, 8, 10, 12]
-    
-    # 1. Set Status to Erased
-    self.m_device_map.setDeviceWriteStatus(eeprom_map.WRITESTAT_ERASED)
-    
-    # 2. Test Erased Status
-    address=0
-    while address < self.m_device_map.deviceBytes():
-      block_map=self.m_device_map.addressedBlockMap(address)
-      if self.m_device_map.blockWriteStatus(address)==WRITESTAT_ERASED:
-        address=block_map.address+block_map.size
-        continue
-      
-      self.m_testutil.fatalError("doMapTest() Fail - ERASED status test")
-      
-      
-    #3. Make status MIXED
-    block_address=0
-    while block_address < self.m_device_map.deviceBytes():
-      block_map=self.m_device_map.addressedBlockMap(block_address)
-      sector_range=range(block_map.base_sector_index, block_map.base_sector_index+block_map.sectors)
-
-      for sector_index in sector_range:
-        sector_map=self.m_device_map.indexedSectorMap(sector_index)
-        sector_address=sector_map.address
-        
-        for page_index in round_one_page_indices:
-          page_address=sector_address+(page_index*eeprom_map.PAGE_SIZE)
-          self.m_device_map.setPageDirty(page_address)
-          
-
-      if self.m_device_map.blockWriteStatus(block_address)==eeprom_map.WRITESTAT_MIXED:
-        block_address=block_map.address+block_map.size
-      else:
-        self.m_testutil.fatalError("doMapTest() Fail - MIXED status test")
-
-    #4. make status WRITTEN
-    block_address=0
-    while block_address < self.m_device_map.deviceBytes():
-      block_map=self.m_device_map.addressedBlockMap(block_address)
-      for sector_subindex in range(block_map.sectors):
-        sector_index=block_map.base_sector_index+sector_subindex
-        sector_map=self.m_device_map.indexedSectorMap(sector_index)
-        sector_address=sector_map.address
-        
-        for page_index in range(16):
-          if page_index not in round_one_page_indices:
-            page_address=sector_address+(page_index*eeprom_map.PAGE_SIZE)
-            self.m_device_map.setPageDirty(page_address)
-            
-        if self.m_device_map.sectorWriteStatus(sector_address)!=eeprom_map.WRITESTAT_WRITTEN:
-          self.m_testutil.fatalError("doMapTest Fail - Sector WRITTEN status Test")
-          
-
-      if self.m_device_map.blockWriteStatus(block_address)==eeprom_map.WRITESTAT_WRITTEN:
-        block_address=block_map.address+block_map.size
-      else:
-        self.m_testutil.fatalError("doMapTest() Fail - Block WRITTEN status test")
-    
-    #5. Check Sector Status as Written
- 
-    sector_address=0  
-    while sector_address < self.m_device_map.deviceBytes():
-      sector_map=self.m_device_map.sectorMap(sector_address)
-      
-      if self.m_device_map.sectorWriteStatus(sector_address)== eeprom_map.WRITESTAT_WRITTEN:
-        sector_address=sector_map.address+sector_map.size
-        continue
-      
-      self.m_testutil.fatalError("doMapTest() Fail - Sector WRITTEN status test")
-      
       
     
       
@@ -386,27 +304,114 @@ class eepromAPI:
       
     return spi_result.success
       
-  def updateWithinPage(self, write_address, write_length, write_array):
-    # Update one page per function use
-    # This function erases a sector EVERY TIME it is used
-    # Proves erase-before-write works, but NOT EFFICIENT
-    
-    # Page level checks
-    start_page = self.m_device_map.pageAddress(write_address)
-    end_page = self.m_device_map.pageAddress(write_address+write_length-1)
-    if start_page != end_page:
-      self.m_testutil.fatalError("Page Write Spans Pages")
       
-    # Sector level check & Sector Erase + Page Write
+  '''
+  Write Data, Erasing as we go.
+  Sector Oriented Algorithm: smallest universally avialble size is 4Kbytes (sector)
+  
+    Split write array into slices of array along sector boundaries
+    Per slice, verify the pages affected are writable
+    When not writable - erase the sector bearing the data
     
-    sector_address = self.m_device_map.sectorAddress(write_address)
+    CAVEAT: pre-existing sector data that is not addressed by the slice
+    will be lost to the erasure!
+      example 1: a gap exists between the sector start and the slice start.
+      example 2: a gap exists between the sector end, and the slice end.
+      outcome1: data written in that gap is lost: written gap pages.
+      outcome2: the gap is unwritten, no data is lost: gap pages were unwritten.
+      
+  Efficiency ?:
+    the deviceMap keeps track of data status on a page granularity, even though
+    pages cannot be singly erased.
+    when a write ends in the middle of a sector, and a later writes are limited
+    to unwritten pages in that sector, the full sector need not be erased.
     
-    if self.eraseSector(sector_address) == False:
-      return False
+    this permits writing to the eeprom with contiguous commands WITHOUT minding
+    whether the boundaries of the write commands is on sector boundaries.
+  '''    
+
+  '''
+  Algorithm:
+    catalog write segments along sector boundaries
+    for each sub-sector: 
+        verify pages-to-be-written are writable
+          if fractional-write of sector
+               verify sectors-to-be-written are writable
+        else flag the sector for erasure
+        
+    erase flagged sub-sectors
     
-    if self.writeWithinPage(write_address, write_length, write_array) == False:
-      return False
+    write entire data bloc
+  '''
+  SectorSlice=coll.namedtuple('SectorSlice', 'sector_address write_offset array_offset length')
+  
+  def write(self, write_address, write_length, write_array):
+    # pre-erase any sectors, as needed
+
+
+    sector_slices=[]
+    erase_sectors=[]
+    start_write_address=write_address
+    end_write_address=write_address+write_length-1
     
+    while start_write_address <= end_write_address:
+      sectr_address= self.m_device_map.sectorAddress(start_write_address)
+      sectr_offset = start_write_address-sectr_address
+      
+      slice_length  = min([ eeprom_map.SECTOR_SIZE-sectr_offset,
+                            end_write_address-start_write_address ])
+
+      sector_slices.append(self.SectorSlice(
+        sector_address = sectr_address,
+        write_offset  = sectr_offset,
+        array_offset   = start_write_address-write_address,
+        length         = slice_length))
+
+      start_write_address+=slice_length
+
+    # what sectors to erase
+    for sector_slice in sector_slices:
+      start_address=write_address+sector_slice.array_offset
+      end_address=start_address+sector_slice.length-1
+
+      if sector_slice.length != eeprom_map.SECTOR_SIZE:
+        writestatus=self.m_device_map.subSectorWriteStatus(start_address, end_address)
+      else:
+        writestatus=self.m_device_map.sectorWriteStatus(sector_slice.sector_address)
+
+      if writestatus!=eeprom_map.WRITESTAT_ERASED:
+        erase_sectors.append(sector_slice.sector_address)
+        
+    # erase WRITTEN sectors
+    for sector_address in erase_sectors:
+      if self.eraseSector(sector_address):
+        continue
+      else:
+        return False
+
+
+    '''
+    All erasure is complete
+    Write data out page-by-page
+    '''
+    written_length=0
+    for sector_slice in sector_slices:
+      sector_address=sector_slice.sector_address
+      page_offset=sector_slice.write_offset
+      write_length=sector_slice.length
+      
+      
+      while page_offset < eeprom_map.SECTOR_SIZE:
+          
+        page_array=write_array[written_length:written_length+eeprom_map.PAGE_SIZE]
+        page_address=sector_address+page_offset
+
+        if self.writeWithinPage(page_address, eeprom_map.PAGE_SIZE, page_array) == False:
+          return False
+
+        written_length+=eeprom_map.PAGE_SIZE
+        page_offset+=eeprom_map.PAGE_SIZE
+
     return True
 
   

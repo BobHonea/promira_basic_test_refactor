@@ -127,7 +127,7 @@ class promactMessages(object):
       self.fatalError("unknown collect response")
 
  
-    found, message=self.getResponseMessage(response)
+    _found, message=self.getResponseMessage(response)
     print("Collect Response: "+message)
     
   pass
