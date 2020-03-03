@@ -11,7 +11,7 @@ from _random import Random
 #==========================================================================
 # HELPER FUNCTIONS
 #==========================================================================
-def array_u08 (n):  return array('B', [0]*n)
+def array_u08 (n):  return array.ArrayType('B', [0]*n)
 def array_u16 (n):  return array('H', [0]*n)
 def array_u32 (n):  return array('I', [0]*n)
 def array_u64 (n):  return array('K', [0]*n)
@@ -56,6 +56,7 @@ class testUtil:
   m_display_trace = False
   m_detail_echo   = False
   m_display_echo  = False
+  m_trace_echo    = False
   m_log_file      = None
   m_log_to_file   = False
   m_trace_to_file = False
@@ -189,17 +190,13 @@ class testUtil:
       
   def bufferDisplayInfo(self, string_info, echo=True):
     if self.m_display_trace:
-      self.bufferTraceInfo(string_info, echo)
-    if self.m_display_echo or echo:
-      print(string_info)
+      self.bufferTraceInfo(string_info, echo or self.m_display_echo)
     if self.m_log_to_file:
       self.bufferLogfileLine(string_info)
       
   def bufferDetailInfo(self, string_info, echo=False):
     if self.m_detail_trace:
-      self.bufferTraceInfo(string_info, echo)
-    if self.m_detail_echo or echo:
-      print(string_info)
+      self.bufferTraceInfo(string_info, echo or self.m_detail_echo)
     if self.m_log_to_file:
       self.bufferLogfileLine(string_info)
     

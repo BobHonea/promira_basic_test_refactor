@@ -345,7 +345,7 @@ class eepromAPI:
   '''
   SectorSlice=coll.namedtuple('SectorSlice', 'sector_address write_offset array_offset length')
   
-  def write(self, write_address, write_length, write_array):
+  def writePages(self, write_address, write_length, write_array):
     # pre-erase any sectors, as needed
 
 
@@ -359,7 +359,7 @@ class eepromAPI:
       sectr_offset = start_write_address-sectr_address
       
       slice_length  = min([ eeprom_map.SECTOR_SIZE-sectr_offset,
-                            end_write_address-start_write_address ])
+                            end_write_address-start_write_address+1 ])
 
       sector_slices.append(self.SectorSlice(
         sector_address = sectr_address,
@@ -396,38 +396,31 @@ class eepromAPI:
     '''
     written_length=0
     for sector_slice in sector_slices:
-      sector_address=sector_slice.sector_address
-      page_offset=sector_slice.write_offset
-      write_length=sector_slice.length
+      sector_write_address=sector_slice.sector_address+sector_slice.write_offset
+      sector_write_length=sector_slice.length
+      sector_array=write_array[written_length:written_length+sector_write_length]
       
+      if self.writeWithinSector(sector_write_address, sector_write_length, sector_array):
+        return False
       
-      while page_offset < eeprom_map.SECTOR_SIZE:
-          
-        page_array=write_array[written_length:written_length+eeprom_map.PAGE_SIZE]
-        page_address=sector_address+page_offset
-
-        if self.writeWithinPage(page_address, eeprom_map.PAGE_SIZE, page_array) == False:
-          return False
-
-        written_length+=eeprom_map.PAGE_SIZE
-        page_offset+=eeprom_map.PAGE_SIZE
+      written_length+=sector_write_length
 
     return True
 
   
-  def writeWithinPage(self, write_address, write_length, write_array):
+  def writeWithinSector(self, write_address, write_length, write_array):
     # Update one page per function use
-    start_page = self.m_device_map.pageAddress(write_address)
-    end_page = self.m_device_map.pageAddress(write_address+write_length-1)
-    if start_page != end_page:
-      self.m_testutil.fatalError("Page Write Spans Pages")
-
-    self.waitUntilNotBusy()
+    page_address = self.m_device_map.pageAddress(write_address)
+    end_page_address = self.m_device_map.pageAddress(write_address+write_length-1)
     
+    while page_address <= end_page_address:
+      self.m_device_map.setPageDirty(write_address)      
+      page_address+=eeprom_map.PAGE_SIZE
+      
+    self.waitUntilNotBusy()
     spi_result =self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_PP,
                                                          write_address, write_length, write_array)
-    
-    self.m_device_map.setSectorWriteStatus(write_address, eeprom_map.WRITESTAT_WRITTEN)
+
     result_length=spi_result.xfer_length
     return (result_length == write_length)
 

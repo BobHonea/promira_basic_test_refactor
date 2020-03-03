@@ -194,7 +194,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
       try_count=0
       while try_count < 3:
         try:
-          self.m_eepromAPI.updateWithinPage(page_address, array_sequence.pageSize(), pattern_array)
+          self.m_eepromAPI.writePages(page_address, array_sequence.pageSize(), pattern_array)
+          
           if verify:
             self.m_eepromAPI.readData(page_address, array_sequence.pageSize(), rxdata_array)
             if not self.m_testutil.arraysMatch(pattern_array, rxdata_array):
@@ -406,11 +407,11 @@ class promiraSpiTestApp(usertest.SwUserTest):
     pattern_array_sequence=self.m_testutil.referenceArraySequence(self.m_testutil.m_ref_array_list)    
 
     verbose=True
-    write_data = True
+    write_data = False
     
     enable_single_iowidth_read    = True
-    enable_hs_single_iowidth_read = False
-    enable_dual_iowidth_read      = False
+    enable_hs_single_iowidth_read = True
+    enable_dual_iowidth_read      = True
   
     read_enables = [ enable_single_iowidth_read, enable_hs_single_iowidth_read, enable_dual_iowidth_read]
 
@@ -470,8 +471,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
     
     error_buckets=[0, 1, 4, 8, 16, 32, 64, 128, 256, 257 ]
-    error_bucket_labels=[ "%03d" % error for error in error_buckets]
-    error_units_label = "Error"
+
 
     self.m_histogram=parameterizedErrorHistogram(
                                         parameter_values,
@@ -516,7 +516,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     
     self.m_eepromAPI.configure()
-    self.m_eepromAPI.doMapTest()
+    
     
     eepromConfig= self.m_eepromAPI.m_devconfig
     if self.m_testutil.traceEnabled():
@@ -566,7 +566,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
     it will never be flushed.
     '''
     self.m_testutil.protectTraceBuffer()
-    self.m_testutil.traceEchoOn()
+    self.m_testutil.traceEchoOff()
+    self.m_testutil.detailEchoOff()
+    self.m_testutil.displayTraceOn()
   
   
   
@@ -580,7 +582,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     if write_data and eeprom_unlocked:
 
-      self.m_spiio.resetClkKHz(2000)
+      self.m_spiio.resetClkKHz(20000)
       pattern_start_byte_address=0
       ### OVERRIDE
       #program_memsize_MB=memsize_MB
@@ -589,7 +591,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       
 
       program_byte_size=int(program_memsize_MB*1024*1024)
-      program_block_size=int(program_byte_size/16)
+      program_block_size=int(program_byte_size/128)
       if program_block_size<256:
           self.m_testutil.fatalError("program block size < 256")
           

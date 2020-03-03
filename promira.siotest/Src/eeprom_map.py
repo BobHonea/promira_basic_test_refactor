@@ -113,7 +113,7 @@ class deviceMap(object):
           sector_map=SectorMap(address=sector_address, size=KB4, block_index=block_ndx)
 
           self.m_sector_map.append(sector_map)
-          self.m_sector_status.append(SECSTAT_UNKNOWN)
+          self.m_sector_status.append(self._sectorStatusVector(SECSTAT_UNKNOWN))
 
           sector_address=sector_map.address+sector_map.size
   
@@ -178,11 +178,16 @@ class deviceMap(object):
       return sector_status
   
     
-  m_left_bits = [ 0x01, 0x03, 0x07, 0x0f, 0x1f, 0x3f, 0x7F, 0xFF]
-  m_right_bits= [ 0xff, 0xfe, 0xfc, 0xf8, 0xf0, 0xE0, 0xC0, 0x80]
+  m_left_bits = [ 0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x003f,
+                  0x007F, 0x00FF, 0x01ff, 0x03ff, 0x07ff, 0x0fff,
+                  0x1fff, 0x3fff, 0x7fff, 0xffff ]
+  m_right_bits= [ 0xffff, 0xfffe, 0xfffc, 0xfff8, 0xfff0, 0xffe0,
+                  0xffc0, 0xff80, 0xff00, 0xfe00, 0xfc00, 0xf800,
+                  0xf000, 0xe000, 0xc000, 0x8000 ]
   
   def _bitsMask(self, start_bit, end_bit):
-    return self.m_right_bits[start_bit]&self.m_left_bits[end_bit]
+    bits= self.m_right_bits[start_bit]&self.m_left_bits[end_bit]
+    return bits
   
   def subSectorWriteStatus(self, start_address, end_address):
     sector_writestatus=self.sectorWriteStatus(start_address)
@@ -261,6 +266,8 @@ class deviceMap(object):
     
     
   def sectorWriteStatus(self, address):
+    if self.sectorIndex(address) >= len(self.m_sector_status):
+      self.m_testutil.fatalError("eeprom_map.sectorWriteStatus(): index out of bounds")
     return self.m_sector_status[self.sectorIndex(address)][0]
 
   def setSectorWriteStatus(self, address, write_status):
@@ -414,13 +421,13 @@ class eepromTest(object):
     return
 
 
-eeprom_test=eepromTest(MICRON_EEPROM_BLOCKS)
-eeprom_test.doMapTest()
-print ("MICRON MAP Test Success")
+#eeprom_test=eepromTest(MICRON_EEPROM_BLOCKS)
+#eeprom_test.doMapTest()
+#print ("MICRON MAP Test Success")
 
-eeprom_test=eepromTest(MICROCHIP_EEPROM_BLOCKS)
-eeprom_test.doMapTest()
-print ("MICROCHIP MAP Test Success")
+#eeprom_test=eepromTest(MICROCHIP_EEPROM_BLOCKS)
+#eeprom_test.doMapTest()
+#print ("MICROCHIP MAP Test Success")
 
 
 

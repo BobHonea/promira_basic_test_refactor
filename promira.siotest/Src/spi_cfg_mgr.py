@@ -62,7 +62,7 @@ class configVal:
     tgt_v1_fixed  = constraintList(values=[5.0, 3.3],
                                     value_type=float),
 
-    tgt_v2_variable = constraintList(values=[1.6, 1.7], value_type=float ),
+    tgt_v2_variable = constraintList(values=[1.6, 1.7, 1.8], value_type=float ),
     
 
     eeprom_config  = constraintList(values=eeprom_devices.eepromDevices, value_type=list))
@@ -72,8 +72,8 @@ class configVal:
     clk_mode        = [SPICLOCKMODE_0], #,SPICLOCKMODE_3],
     bit_order       = [SPIBITORDER_MSB],
     ss_polarity     = [SPI_SS_ALL_ACTIVE_LOW],
-    clk_kHz         = [ 4000  ],
-    #lk_kHz         = [ 1000, 2000, 5000, 7500, 10000, 12000], #,  15000, 17500, 20000 , 22000, 25000,  27500, 30000] , #32500, 35000, 37500, 40000, 42500, 45000, 47500, 50000, 52500, 55000, 57500, 60000 ],
+    #clk_kHz         = [ 2000  ],
+    clk_kHz         = [ 5000, 7500, 10000, 12000,  15000, 17500, 20000 , 22000, 25000,  27500, 30000, 32500, 35000, 37500, 40000 , 42500, 45000, 47500, 50000, 52500, 55000, 57500, 60000 ],
     address_base    = [0],   # [0, ... ,0x10000],
     tgt_v1_fixed    = [None], #, [3.3, 5.0],
     tgt_v2_variable = [1.8],#[1.6, 1.8, 3.3 ],
