@@ -369,7 +369,7 @@ class spiDescriptorApi(object):
     phase_descriptor_columns=[self.m_cmd_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]
     phase_descriptor_types=[busyPhx, wrenPhx, cmdPhx, addrPhx, dummyPhx, dataPhx]
 
-    self.m_phase_data_lists=self.compactTypedLists(phase_data_columns, phase_data_types)
+    #self.m_phase_data_lists=self.compactTypedLists(phase_data_columns, phase_data_types)
     self.m_phase_descriptor_lists=self.compactKeyedLists(phase_descriptor_columns, phase_descriptor_types)
 
       

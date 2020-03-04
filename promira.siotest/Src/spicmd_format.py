@@ -95,6 +95,9 @@ w4CmdPhase=cmdPhx(mode=SPIIO_QUAD)
 '''
 Address Phase Specs
 '''
+w1L4AddrPhase=addrPhx(mode=SPIIO_SINGLE, length=4)
+w2L4AddrPhase=addrPhx(mode=SPIIO_DUAL, length=4)
+w4L4AddrPhase=addrPhx(mode=SPIIO_QUAD, length=4)
 w1L3AddrPhase=addrPhx(mode=SPIIO_SINGLE, length=3)
 w2L3AddrPhase=addrPhx(mode=SPIIO_DUAL, length=3)
 w4L3AddrPhase=addrPhx(mode=SPIIO_QUAD, length=3)
