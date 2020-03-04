@@ -285,7 +285,7 @@ class spiDescriptorApi(object):
   _iotype_string  = ['nodata', 'read', 'write']
   _iotype_code    = [ IOTYPE_NODATA, IOTYPE_READ, IOTYPE_WRITE]
 
-  class compactTypedList(object):
+  class compactTypedLists(object):
     
     def __init__(self, itemType):
       self.m_list=[] 
