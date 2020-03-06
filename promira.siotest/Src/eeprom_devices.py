@@ -13,24 +13,24 @@ chip_mcc26VF=2
 chip_mcn25QL_XX=3
 chip_mcn25QU_XX=4
 
-devConfig=coll.namedtuple('devConfig', 'jedec vdd memsize chip_id mfgr chip_type')
+devConfig=coll.namedtuple('devConfig', 'jedec vdd memsize chip_id mfgr chip_type dtr_mode long_addr')
 
 
-mcn8MB3V3  =devConfig(jedec=[0xBF, 0x26, 0x42], vdd=3.3, memsize=0x400000, chip_id=chip_mcc26VF, mfgr='Microchip', chip_type='SST26VF032B')  
-mcc1MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x17], vdd=3.3, memsize=0x100000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-mcc2MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x18], vdd=3.3, memsize=0x200000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-mcc4MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x19], vdd=3.3, memsize=0x400000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-mcc8MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x20], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-mcc16MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x21], vdd=3.3, memsize=0x1000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-mcc32MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x22], vdd=3.3, memsize=0x2000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-mcc1MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x17], vdd=1.8, memsize=0x100000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-mcc2MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x18], vdd=1.8, memsize=0x200000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-mcc4MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x19], vdd=1.8, memsize=0x400000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')
-gdmcc8MB3V3=devConfig(jedec=[0xFF, 0x00, 0x01], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxxABA')
-gdmcc32MB1V8=devConfig(jedec=[0xFF, 0x00, 0x02], vdd=1.8, memsize=0x2000000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxxABA')  
+mcn8MB3V3  =devConfig(jedec=[0xBF, 0x26, 0x42], vdd=3.3, memsize=0x400000, chip_id=chip_mcc26VF, mfgr='Microchip', chip_type='SST26VF032B', dtr_mode=False, long_addr=False)
+mcc1MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x17], vdd=3.3, memsize=0x100000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxx', dtr_mode=False, long_addr=False)
+mcc2MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x18], vdd=3.3, memsize=0x200000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxx', dtr_mode=False, long_addr=False)
+mcc4MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x19], vdd=3.3, memsize=0x400000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxx', dtr_mode=False, long_addr=False)
+mcc8MB3V3  =devConfig(jedec=[0x20, 0xBA, 0x20], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxx', dtr_mode=False, long_addr=False)
+mcc16MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x21], vdd=3.3, memsize=0x1000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxx', dtr_mode=False, long_addr=False)
+mcc32MB3V3 =devConfig(jedec=[0x20, 0xBA, 0x22], vdd=3.3, memsize=0x2000000,chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxx', dtr_mode=False, long_addr=False)
+mcc1MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x17], vdd=1.8, memsize=0x100000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxx', dtr_mode=False, long_addr=False)
+mcc2MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x18], vdd=1.8, memsize=0x200000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxx', dtr_mode=False, long_addr=False)
+mcc4MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x19], vdd=1.8, memsize=0x400000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxx', dtr_mode=False, long_addr=False)
+mcc8MB1V8  =devConfig(jedec=[0x20, 0xBB, 0x20], vdd=1.8, memsize=0x800000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxx', dtr_mode=False, long_addr=False)
+mcc16MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x21], vdd=1.8, memsize=0x1000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxx', dtr_mode=False, long_addr=False)
+mcc32MB1V8 =devConfig(jedec=[0x20, 0xBB, 0x22], vdd=1.8, memsize=0x2000000,chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxx', dtr_mode=False, long_addr=True)
+gdmcc8MB3V3=devConfig(jedec=[0xFF, 0x00, 0x01], vdd=3.3, memsize=0x800000, chip_id=chip_mcn25QL, mfgr='Micron', chip_type='MT25QLxxx', dtr_mode=False, long_addr=False)
+gdmcc32MB1V8=devConfig(jedec=[0xFF, 0x00, 0x02], vdd=1.8, memsize=0x2000000, chip_id=chip_mcn25QU, mfgr='Micron', chip_type='MT25QUxxx', dtr_mode=False, long_addr=True)  
             
 eepromDevices=[mcn8MB3V3,
                mcc1MB3V3, mcc2MB3V3, mcc4MB3V3, mcc8MB3V3, mcc16MB3V3, mcc32MB3V3,

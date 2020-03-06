@@ -72,14 +72,14 @@ IOTYPE_WRITE= 2
 
 READ_DATA_CMDS  =   [RDSR, RDCR, READ, HSREAD, SQOREAD, SQIOREAD,
                      SDOREAD, SDIOREAD, RBSQI_WRAP, RBSPI_WRAP,
-                     JEDEC_ID, QUAD_JID, SFDP, RBPR, RSID ]
+                     JEDEC_ID, QUAD_JID, SFDP, RBPR, RSID, RNVCFG ]
 
-WRITE_DATA_CMDS =   [WRSR, SETBURST, PP, QPP, WBPR, NVWLDR, PSID]
+WRITE_DATA_CMDS =   [WRSR, SETBURST, PP, QPP, WBPR, NVWLDR, PSID, WNVCFG]
 
 NODATA_CMDS     =   [NOP, RSTEN, RSTMEM, ENQIO, RSTQIO, WREN, WRDI, SE, BE, CE, ULBPR]
 
 WREN_REQUIRED   =   [ SE, BE, CE, PP, WRSR, PSID, WBPR, LBPR,
-                     ULBPR, NVWLDR, QPP] #LSID, removed for convflict with RNVCFG
+                     ULBPR, NVWLDR, QPP, WNVCFG] #LSID, removed for convflict with RNVCFG
 
 
 
@@ -278,6 +278,10 @@ SPICMDTYPE_20=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L4AddrP
 SPICMDTYPE_21=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L4AddrPhase, data=w1Data_page)
 SPICMDTYPE_22=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L4AddrPhase, data=w4Data_page)
 SPICMDTYPE_23=SpiCmdSpec(iowMax=SPIIO_DUAL,    cmd=w1CmdPhase, address=w1L4AddrPhase, dummy=x1DummyPhase, data=w2Data_1plus)
+SPICMDTYPE_24=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L4AddrPhase)
+SPICMDTYPE_25=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L4AddrPhase)
+SPICMDTYPE_26=SpiCmdSpec(iowMax=SPIIO_SINGLE,  cmd=w1CmdPhase, address=w1L4AddrPhase, data=w1Data_page)
+SPICMDTYPE_27=SpiCmdSpec(iowMax=SPIIO_QUAD,    cmd=w4CmdPhase, address=w4L4AddrPhase, data=w4Data_page)  
 
 
 
@@ -314,7 +318,8 @@ PHASE_SPECS_1C = [SPICMDTYPE_20]
 PHASE_SPECS_1D = [SPICMDTYPE_21]
 PHASE_SPECS_1E = [SPICMDTYPE_22]
 PHASE_SPECS_1F = [SPICMDTYPE_23]
-
+PHASE_SPECS_20 = [SPICMDTYPE_24, SPICMDTYPE_25]
+PHASE_SPECS_21 = [SPICMDTYPE_26, SPICMDTYPE_27]
 
 
 SPICMD_NOP        = [NOP,       0,            IOTYPE_NONE]
@@ -344,9 +349,12 @@ SPICMD_SFDP       = [SFDP,      0x0D,         IOTYPE_READ ]
 SPICMD_WREN       = [WREN,      0,            IOTYPE_NONE]
 SPICMD_WRDI       = [WRDI,      0,            IOTYPE_NONE]
 SPICMD_SE         = [SE,        0x0E,         IOTYPE_NONE]
+SPICMD_SE4A       = [SE,        0x20,         IOTYPE_NONE]
 SPICMD_BE         = [BE,        0x0E,         IOTYPE_NONE]
+SPICMD_BE4A       = [BE,        0x20,         IOTYPE_NONE]
 SPICMD_CE         = [CE,        0,            IOTYPE_NONE]
 SPICMD_PP         = [PP,        0x0F,         IOTYPE_WRITE]
+SPICMD_PP4A       = [PP,        0x21,         IOTYPE_WRITE]
 SPICMD_QPP        = [QPP,       0x10,         IOTYPE_WRITE]
 SPICMD_WRSU       = [WRSU,      0,            IOTYPE_NONE]
 SPICMD_WRRE       = [WRRE,      0,            IOTYPE_NONE]
@@ -384,15 +392,18 @@ SPI_CMDSPECS = [ SPICMD_NOP, SPICMD_RSTEN, SPICMD_RSTMEM,
                  SPICMD_NVWLDR, SPICMD_ULBPR, SPICMD_RSID,
                  SPICMD_PSID,
                  #SPICMD_LSID,  conflicts with R
-                 SPICMD_SDOREADX, SPICMD_RNVCFG, SPICMD_RVCFG, SPICMD_RFLAG, SPICMD_RENHVCFG ] 
+                 SPICMD_SDOREADX, SPICMD_RNVCFG, SPICMD_RVCFG, SPICMD_RFLAG, SPICMD_RENHVCFG,
+                 SPICMD_SE4A, SPICMD_BE4A, SPICMD_PP4A ] 
 
 
 PHASE_SPECS = [ PHASE_SPECS_0, PHASE_SPECS_1, PHASE_SPECS_2, PHASE_SPECS_3, PHASE_SPECS_4,
-              PHASE_SPECS_5, PHASE_SPECS_6, PHASE_SPECS_7, PHASE_SPECS_8, PHASE_SPECS_9,
-              PHASE_SPECS_A, PHASE_SPECS_B, PHASE_SPECS_C, PHASE_SPECS_D, PHASE_SPECS_E,
-              PHASE_SPECS_F, PHASE_SPECS_10, PHASE_SPECS_11, PHASE_SPECS_12,
-              PHASE_SPECS_13, PHASE_SPECS_14, PHASE_SPECS_15, PHASE_SPECS_16, PHASE_SPECS_17,
-              PHASE_SPECS_18, PHASE_SPECS_19, PHASE_SPECS_1A, PHASE_SPECS_1B]
+                PHASE_SPECS_5, PHASE_SPECS_6, PHASE_SPECS_7, PHASE_SPECS_8, PHASE_SPECS_9,
+                PHASE_SPECS_A, PHASE_SPECS_B, PHASE_SPECS_C, PHASE_SPECS_D, PHASE_SPECS_E,
+                PHASE_SPECS_F, PHASE_SPECS_10, PHASE_SPECS_11, PHASE_SPECS_12,
+                PHASE_SPECS_13, PHASE_SPECS_14, PHASE_SPECS_15, PHASE_SPECS_16, PHASE_SPECS_17,
+                PHASE_SPECS_18, PHASE_SPECS_19, PHASE_SPECS_1A, PHASE_SPECS_1B,
+                PHASE_SPECS_1C, PHASE_SPECS_1D, PHASE_SPECS_1E, PHASE_SPECS_1F,
+                PHASE_SPECS_20, PHASE_SPECS_21 ]
 
 
   

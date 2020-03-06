@@ -57,14 +57,15 @@ from __future__ import division, with_statement, print_function
 #==========================================================================
 import usertest
 import promact_is_py as pmact
-from eeprom import eepromAPI
+from eeprom_2 import eepromAPI
 #import eeprom_map
-import cmd_protocol as protocol
+import cmd_protocol_2 as protocol
 import spi_cfg_mgr as spicfg
 import test_utility as testutil
 import promactive_msg as pmmsg 
 import time
 import collections as coll
+import keyboard as keybd
 
 #from result_histogram import result2DHistogram
 #from error_histogram import parameterizedErrorHistogram
@@ -237,7 +238,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
         self.m_testutil.bufferDetailInfo("%s comparison fault" % cmd_namestring)
         single_valued_input, error_count=self.m_testutil.arraySingleValued(rxdata_array)
 
-        if verbose:
+        if True: #verbose:
           if single_valued_input:
             self.m_testutil.bufferDetailInfo("rxdata array is single valued")          
           self.m_testutil.bufferDetailInfo("Sector Address %x" % address)
@@ -406,13 +407,13 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_testutil.buildPageArrays() 
     pattern_array_sequence=self.m_testutil.referenceArraySequence(self.m_testutil.m_ref_array_list)    
 
-    verbose=True
+    verbose=False
     write_data = False
     
     enable_single_iowidth_read    = True
-    enable_hs_single_iowidth_read = True
-    enable_dual_iowidth_read      = True
-  
+    enable_hs_single_iowidth_read = False
+    enable_dual_iowidth_read      = False
+      
     read_enables = [ enable_single_iowidth_read, enable_hs_single_iowidth_read, enable_dual_iowidth_read]
 
     control=self.ReadTestControl(
@@ -470,7 +471,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
 
     
-    error_buckets=[0, 1, 4, 8, 16, 32, 64, 128, 256, 257 ]
+    error_buckets=[0, 1, 4, 8, 16, 32, 64, 128, 256, 257, 258 ]
 
 
     self.m_histogram=parameterizedErrorHistogram(
@@ -493,6 +494,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_testutil.enableLogfile()
     #self.m_testutil.detailEchoOn()
   
+    #self.m_testutil.logReferenceArrays()
     
     #self.m_spiio.signalEvent()
     #self.m_testutil.fatalError("just because")
@@ -535,6 +537,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       micronstatus=self.m_eepromAPI.readMicronStatusRegisters()
       self.m_testutil.bufferTraceInfo(repr(micronstatus), True)
       
+      long_address_enabled=self.m_eepromAPI.longAddressMode()
       dtr_iomode_enabled=self.m_eepromAPI.dtrIoModeEnabled()
       dual_iomode_enabled=self.m_eepromAPI.dualIoModeEnabled()
       quad_iomode_enabled=self.m_eepromAPI.quadIoModeEnabled()
@@ -544,7 +547,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
       dummy_cycles_code=self.m_eepromAPI.dummyCycles()
       
       self.m_testutil.bufferDetailInfo("NVCONFIG REGISTER VALUES")
-      self.m_testutil.bufferDetailInfo("DTR IoMode: "+str(dtr_iomode_enabled)+
+      self.m_testutil.bufferDetailInfo("Long Address Mode: "+str(long_address_enabled)+
+                                       "   DTR IoMode: "+str(dtr_iomode_enabled)+
                                        "   Dual IoMode: "+str(dual_iomode_enabled)+
                                        "   Quad IoMode: "+str(quad_iomode_enabled),
                                        True)
@@ -552,10 +556,16 @@ class promiraSpiTestApp(usertest.SwUserTest):
                                        "   Xip: "+str(xip_iomode)+
                                        "   Driver Strength: "+ str(driver_strength),
                                        True)
-    
+
+      if eepromConfig.long_addr:
+        self.m_eepromAPI.setLongAddressMode(True)
+        if self.m_eepromAPI.longAddressMode():
+          print("Long (4 byte) address mode is ENABLED")
     
       if dummy_cycles_code==0:
         cycles='DEFAULT'
+        
+
       else:
         cycles = str(dummy_cycles_code)
         
@@ -582,11 +592,11 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
     if write_data and eeprom_unlocked:
 
-      self.m_spiio.resetClkKHz(20000)
+      self.m_spiio.resetClkKHz(25000)
       pattern_start_byte_address=0
       ### OVERRIDE
-      #program_memsize_MB=memsize_MB
-      program_memsize_MB=memsize_MB/1024
+      program_memsize_MB=memsize_MB
+      #program_memsize_MB=memsize_MB/1024
       ### OVERRIDE
       
 
@@ -678,6 +688,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       
             pattern_array_sequence.setIndex(0)
             sector_address=pattern_array_sequence.firstAddress()
+            eeprom_test_address=0
                   
             '''
             check to see that power is appropriate for the target
@@ -724,19 +735,27 @@ class promiraSpiTestApp(usertest.SwUserTest):
                                                                    pattern_array_sequence.currentAddress(),
                                                                    self.m_eepromAPI.EEPROM_PAGE_SIZE,
                                                                    pattern_array_sequence.currentArray(),
-                                                                   False)
+                                                                   verbose and clock_kHz <=20000)
                   
                   subtest_monitor.enterResult(test_pass)
                   self.m_histogram.addData(spi_parameters.clk_kHz, test_pass, errors, single_valued)
+                  
+                  # pattern page selection and address page advance must be in sync
+                  # BUG at address 0x00ffffff, prevent advancing so far till fixed
+                  # bug is in eeprom_map.sectorWriteStatus
+                  
                   pattern_array_sequence.nextIndex()
+                  eeprom_test_address+=self.m_eepromAPI.EEPROM_PAGE_SIZE
                   
-                  if not test_pass and single_valued and spi_parameters.clk_kHz <= 20000:
-                    self.m_spiio.signalEvent()
-                    pass
+                  if eeprom_test_address==0x00ff0000:
+                    eeprom_test_address=0
                   
-                  self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
-                  self.m_testutil.bufferDetailInfo("subtest iteration #"+str(subtest_monitor.resultCount())+" of " +
-                                                   str(subtest_monitor.maxTrials())+" failed")
+                  if not test_pass:
+                    if spi_parameters.clk_kHz <= 20000:
+                      self.m_spiio.signalEvent()
+                    self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
+                    self.m_testutil.bufferDetailInfo("subtest iteration #"+str(subtest_monitor.resultCount())+" of " +
+                                                     str(subtest_monitor.maxTrials())+" failed")
   
                   
                   if subtest_monitor.failCriteriaMet():
@@ -783,7 +802,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
         self.m_testutil.bufferDetailInfo("Total Single Valued Failures = %s" % self.m_single_valued_failure, True)
 
       self.m_histogram.dumpHistogram()
-      self.m_histogram.dumpFaultHistory()
+      self.m_testutil.flushLogfileBuffer()
+      #self.m_histogram.dumpFaultHistory()
 
 
       if control.use_auto_vernier and auto_vernier_cycle_count>control.auto_vernier_soak_cycles:
@@ -812,6 +832,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
           else:
             # retry in cycle counts, try again much later
             auto_vernier_cycle_count=0
+
             
     self.m_testutil.closeLogFile()
           

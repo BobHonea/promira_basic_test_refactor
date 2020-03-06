@@ -59,7 +59,7 @@ class testUtil:
   m_trace_echo    = False
   m_log_file      = None
   m_log_to_file   = False
-  m_trace_to_file = False
+  m_log_to_file = False
   m_file_log_buffer_depth = 0
   m_file_log_buffer_lines = 0
   m_trace_enabled = False
@@ -90,20 +90,21 @@ class testUtil:
     datetime_string=time.strftime("%Y%m%d-%H%M%S")
     file_name="SpiReadTest_%s.log" % datetime_string
     file_pathname=file_path+"/"+file_name
-    try:
-      with open(file_pathname,"w+") as self.m_log_file:
-        self.m_log_file.write("SPI Read Test Log File: %s" % file_name)
-        self.m_file_log_buffer_depth = 200
-        self.m_file_log_buffer_lines = 0
-        return self.m_log_file
-      
+    self.m_log_file=open(file_pathname,"w+")
+    self.m_file_log_buffer_depth = 200
+    self.m_file_log_buffer_lines = 0
+    self.initLogfileBuffer(200)
+    self.bufferLogfileLine("SPI EEPROM Read Test Log: "+file_name)
+    self.flushLogfileBuffer()
+    return self.m_log_file
+    '''  
     except IOError as e:
       print("Open or Write Failure to %s: %s" %(file_pathname, e))
       self.fatalError("File I/O Error")
       
     finally:
       return
-
+    '''
   
   def closeLogFile(self):
     self.flushLogBuffer()
@@ -111,34 +112,38 @@ class testUtil:
 
   def enableLogfile(self):
     if self.m_log_file!=None:
-      self.m_trace_to_file = True
+      self.m_log_to_file = True
     
   def disableLogfile(self):
     if self.m_log_file!=None:
-      self.m_trace_to_file = False
+      self.m_log_to_file = False
     
-  def initLogfileBuffer(self, buffer_depth):
+  def initLogfileBuffer(self, buffer_depth=None):
+    if buffer_depth!=None:
+      self.m_file_log_buffer_depth=buffer_depth
     self.m_file_log_buffer=[]
-    self.m_file_log_buffer_depth=buffer_depth
 
   def bufferLogfileLine(self, string_info):
     self.m_file_log_buffer.append(string_info)
     self.m_file_log_buffer_lines+=1
     if self.m_file_log_buffer_lines==self.m_file_log_buffer_depth:
-      self.flushLogFile()
+      self.flushLogfileBuffer()
       self.m_file_log_buffer_lines=0
   
   def flushLogfileBuffer(self):
     if len(self.m_file_log_buffer) > 0:
-      try:
-        for line in self.m_file_log_buffer:
-          self.m_log_file.write(line)
+      #try:
+      for line in self.m_file_log_buffer:
+        self.m_log_file.write(line+"\n")
+        
+      self.m_file_log_buffer=[]
+      self.m_file_log_buffer_lines=0
 
-      except IOError as e:
-        self.fatalError("File Write Fail: %s" % e)
+      #except IOError as e:
+      #  self.fatalError("File Write Fail: %s" % e)
 
-      finally:
-        return
+      #finally:
+      return
   
 
   def traceEnabled(self):
@@ -191,14 +196,11 @@ class testUtil:
   def bufferDisplayInfo(self, string_info, echo=True):
     if self.m_display_trace:
       self.bufferTraceInfo(string_info, echo or self.m_display_echo)
-    if self.m_log_to_file:
-      self.bufferLogfileLine(string_info)
+
       
   def bufferDetailInfo(self, string_info, echo=False):
     if self.m_detail_trace:
       self.bufferTraceInfo(string_info, echo or self.m_detail_echo)
-    if self.m_log_to_file:
-      self.bufferLogfileLine(string_info)
     
   def bufferTraceInfo(self, string_info, echo=False):
     if self.m_trace_enabled:
@@ -208,6 +210,8 @@ class testUtil:
       if self.m_trace_echo or echo:
         print(string_info)
       self.m_trace_buffer.append(string_info)
+      if self.m_log_to_file:
+        self.bufferLogfileLine(string_info)
   
   def flushTraceBuffer(self):
     if self.m_trace_enabled:
@@ -448,7 +452,7 @@ class testUtil:
   def printArrayHexDump(self, label, data_array=None, echo_to_display=False):
     
     if not type(data_array)==array.ArrayType or len(data_array)==0:
-      self.bufferDisplayInfo("Hexdump:  array is empty")
+      self.bufferDetailInfo("Hexdump:  array is empty")
       return
     
     bytes_per_line = 32
@@ -456,7 +460,7 @@ class testUtil:
     array_lines = (array_size + bytes_per_line - 1) // bytes_per_line
     dump_bytes = array_size
     dump_index = 0
-    self.bufferDisplayInfo("%s [ 0x%x bytes ]" % (label, array_size), echo_to_display)
+    self.bufferDetailInfo("%s [ 0x%x bytes ]" % (label, array_size), echo_to_display)
     for line in range(array_lines):
       linestart = line * bytes_per_line
       linestring = " %02X : " % linestart
@@ -581,3 +585,12 @@ class testUtil:
       
     return errors==0, errors
   pass
+
+
+  def logReferenceArrays(self):
+    for index in range(self.refArrayCount()):
+      this_array=self.nthReferencePageArray(index)
+      label="Reference Array %02d" % index
+      self.printArrayHexDump(label, this_array, True)
+      
+    

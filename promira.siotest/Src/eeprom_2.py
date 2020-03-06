@@ -10,6 +10,7 @@ import eeprom_map
 
 
 
+
 PWR_3_3V = 3.3
 PWR_1_8V = 1.8
 
@@ -162,42 +163,77 @@ class eepromAPI:
     self.m_testutil.fatalError("ReadStatusRegister error")
     return self.EESTATUS_READ_ERROR
   
-  def nvConfigStatus(self,mask, shift):
-    if self.m_micron_status==None:
-      self.readMicronStatusRegisters()
-    return (self.m_micron_status.nv_config & mask) >> shift
-    
-    
-  def enableLongAddressMode(self, mask, shift):
-    status_value=array.ArrayType('B', [0]*2)
-    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RNVCFG, None, 2, status_value)
-    status_value[0] = status_value[0]&0xfe
-    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WNVCFG, None, 2, status_value)
+  def nvConfigStatus(self,mask, shift, read_now=False):
+    register_bytes=array.ArrayType('B', [0]*2)
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RNVCFG, None, 2, register_bytes)
+    register=register_bytes[0]+ register_bytes[1]*256    
+    return (register >>  shift) & mask
+  
+  BitField=coll.namedtuple('BitField', 'mask shift')
 
-    if _spi_result[0]==True:
-      self.m_4byte_addr_mode=True
+  nvcfg_bitfield__not_long_address  = BitField(mask=0b1,   shift=0)
+  nvcfg_bitfield__not_dual_io       = BitField(mask=0b1,   shift=1)
+  nvcfg_bitfield__not_quad_io       = BitField(mask=0b1,   shift=2)
+  nvcfg_bitfield__hldrst_disabled   = BitField(mask=0b1,   shift=3)
+  nvcfg_bitfield__dtr_disabled      = BitField(mask=0b1,   shift=4)
+  nvcfg_bitfield__rsthld_disabled   = BitField(mask=0b1,   shift=5)
+  nvcfg_bitfield__drv_strength      = BitField(mask=0b111, shift=6)
+  nvcfg_bitfield__xip_mode          = BitField(mask=0b111, shift=9)
+  nvcfg_bitfield__dummy_clock_cycles= BitField(mask=0b111, shift=12)
+      
+  def update_nvcfg_bitfield(self, field:BitField, field_value):
+    register_bytes=array.ArrayType('B', [0]*2)
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RNVCFG, None, 2, register_bytes)
+    register=register_bytes[0]+ register_bytes[1]*256
+    register = register &  ~(field.mask << field.shift)
+    register = register | (field_value << field.shift)
+    register_bytes[0]=register&0xff
+    register_bytes[1]=register//256
+    _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_WNVCFG, None, 2, register_bytes)
+    return 
+
+  
+  def setLongAddressMode(self, enable_long_addresses):
+    self.update_nvcfg_bitfield(self.nvcfg_bitfield__not_long_address, 0)
+    self.m_4byte_addr_mode=self.longAddressMode()
+    return self.m_4byte_addr_mode
     pass
   
+
+
+    
   def dualIoModeEnabled(self):
-    return not self.nvConfigStatus(0b10, 1)
+    field=self.nvcfg_bitfield__not_dual_io
+    return not self.nvConfigStatus(field.mask, field.shift)
   
   def quadIoModeEnabled(self):
-    return not self.nvConfigStatus(0b100, 2)
+    field=self.nvcfg_bitfield__not_quad_io
+    return not self.nvConfigStatus(field.mask, field.shift)
   
   def holdResetDisabled(self):
-    return self.nvConfigStatus(0b1000, 3)
+    field=self.nvcfg_bitfield__hldrst_disabled
+    return not self.nvConfigStatus(field.mask, field.shift)
   
   def dtrIoModeEnabled(self):
-    return not self.nvConfigStatus(0b10000, 4)
+    field=self.nvcfg_bitfield__dtr_disabled
+    return not self.nvConfigStatus(field.mask, field.shift)
+  
+  def longAddressMode(self):
+    field=self.nvcfg_bitfield__not_long_address
+    return not self.nvConfigStatus(field.mask, field.shift)
   
   def driverStrength(self):
-    return self.nvConfigStatus(0x0070, 5)
-
+    field=self.nvcfg_bitfield__drv_strength
+    return self.nvConfigStatus(field.mask, field.shift)
+  
   def xipIoMode(self):
-    return self.nvConfigStatus(0x0f00, 8)
+    field=self.nvcfg_bitfield__xip_mode
+    return self.nvConfigStatus(field.mask, field.shift)
     
   def dummyCycles(self):
-    cycle_code=self.nvConfigStatus(0xf000, 12)
+    field=self.nvcfg_bitfield__xip_mode
+    cycle_code=self.nvConfigStatus(field.mask, field.shift)
+    
     if cycle_code == 0xf:
       cycle_code = 0
     return cycle_code
@@ -213,7 +249,7 @@ class eepromAPI:
     flagstatus=status_val[0]
     
     _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RNVCFG, None, 2, status_val2)
-    nvconfig=  status_val2[0] + (int(status_val2[1])>>8)
+    nvconfig=  status_val2[0] + (status_val2[1]*256)
     
     _spi_result=self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RVCFG, None, 1, status_val)
     vconfig=status_val[0]
@@ -312,7 +348,12 @@ class eepromAPI:
     
     self.waitUntilNotBusy()
     sector_address=self.m_device_map.sectorAddress(address)
-    spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_SE, sector_address)
+    if self.m_4byte_addr_mode:
+      se_cmd=protocol.SPICMD_SE4A
+    else:
+      se_cmd=protocol.SPICMD_SE
+      
+    spi_result = self.m_spiio.spiMasterMultimodeCmd(se_cmd, sector_address)
 
     if spi_result.success:
       self.m_device_map.setSectorWriteStatus(sector_address, eeprom_map.WRITESTAT_ERASED)
@@ -447,8 +488,15 @@ class eepromAPI:
       page_address+=eeprom_map.PAGE_SIZE
       
     self.waitUntilNotBusy()
-    spi_result =self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_PP,
-                                                         write_address, write_length, write_array)
+    if self.m_4byte_addr_mode:
+      page_program_cmd=protocol.SPICMD_PP4A
+    else:
+      page_program_cmd=protocol.SPICMD_PP
+      
+    spi_result =self.m_spiio.spiMasterMultimodeCmd(page_program_cmd,
+                                                   write_address,
+                                                   write_length,
+                                                   write_array)
 
     result_length=spi_result.xfer_length
     return (result_length == write_length)

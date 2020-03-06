@@ -6,6 +6,7 @@ Created on Feb 10, 2020
 
 import test_utility
 import numpy as np
+import promira
 
 
 '''
@@ -112,6 +113,8 @@ class parameterizedErrorHistogram(object):
       else:
         fault_ndx=self.m_fault_types.index(fault_type)
         self.m_fault_events[fault_ndx]+=1
+        
+      self.addFaultError(parameter_value)
 
     def dumpFaultHistory(self):
       if len(self.m_fault_history) > 0:
@@ -123,6 +126,34 @@ class parameterizedErrorHistogram(object):
         self.display("No Faults Recorded")
 
         
+    def addFaultError(self, parameter_value):
+      #self.m_event_count+=1
+      bucket_ndx=self.m_bucket_values.index(parameter_value)
+
+      try:
+        error_count_array=self.m_errors[bucket_ndx]
+        promira_error_ndx=self.errorIndex(258)
+        error_count_array[promira_error_ndx]+=1
+      except ValueError as e:
+        self.m_testutil.fatalError("histogram addData ValueError:" + e) 
+      
+      finally:
+        return
+
+    def updateTrueParameter(self, parameter_value, actual_parameter):
+      #self.m_event_count+=1
+      bucket_ndx=self.m_bucket_values.index(parameter_value)
+
+      try:
+        error_count_array=self.m_errors[bucket_ndx]
+        promira_error_ndx=self.errorIndex(259)
+        error_count_array[promira_error_ndx]=actual_parameter
+      except ValueError as e:
+        self.m_testutil.fatalError("histogram addData ValueError:" + e) 
+      
+      finally:
+        return      
+      
     def addData(self, parameter_value, data_value, error_count, single_value_input):
       self.m_event_count+=1
       bucket_ndx=self.m_bucket_values.index(parameter_value)
@@ -170,10 +201,11 @@ class parameterizedErrorHistogram(object):
       space_left=spaces-space_right
       return( " "*(space_left)+text+" "*space_right)
 
-    m_oneval_column_header="1-Val"
+    m_singval_col_hdr="1-Val"
+    m_promira_error_col_hdr="Prmra"
     
     def columnWidth(self):
-      minimum_width=len(self.m_oneval_column_header)+2
+      minimum_width=len(self.m_singval_col_hdr)+2
       dynamic_width=self.m_number_width+2
       return max([dynamic_width, minimum_width])
 
@@ -190,7 +222,11 @@ class parameterizedErrorHistogram(object):
 
       for value in self.m_error_buckets:
         if value==257:
-          display_value=self.centerText(self.m_oneval_column_header, column_width)
+          display_value=self.centerText(self.m_singval_col_hdr, column_width)
+        elif value==258:
+          display_value=self.centerText(self.m_promira_error_col_hdr, column_width)
+        elif value==259:
+          display_value=self.centerText(self.m_actual_clock_col_hdr, column_width)
         else:
           display_value=self.centerText("%d"%value, column_width)
           
@@ -261,17 +297,18 @@ class parameterizedErrorHistogram(object):
       display total trials
       display total events for each data value
       '''
-      total_trials=data_total_count[0]+data_total_count[1]
-      self.display("Total Trials= %d" % total_trials)
-      for ydx in self.m_data_value_range:
-        self.display("Total %s = %d" % (self.m_data_labels[ydx],data_total_count[ydx]))
-        
-      '''
-      display max/min for each data value
-      '''  
-      for ndx in self.m_data_value_range:
-        self.display("Max %s = %d at %s" % (self.m_data_labels[ndx],data_max_count[ndx], max_count_label[ndx]))
-        self.display("Min %s = %d at %s" % (self.m_data_labels[ndx],data_min_count[ndx], min_count_label[ndx]))
+      if False:
+        total_trials=data_total_count[0]+data_total_count[1]
+        self.display("Total Trials= %d" % total_trials)
+        for ydx in self.m_data_value_range:
+          self.display("Total %s = %d" % (self.m_data_labels[ydx],data_total_count[ydx]))
+          
+        '''
+        display max/min for each data value
+        '''  
+        for ndx in self.m_data_value_range:
+          self.display("Max %s = %d at %s" % (self.m_data_labels[ndx],data_max_count[ndx], max_count_label[ndx]))
+          self.display("Min %s = %d at %s" % (self.m_data_labels[ndx],data_min_count[ndx], min_count_label[ndx]))
         
         
       for line in self.histogramHeader():

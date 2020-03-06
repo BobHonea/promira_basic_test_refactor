@@ -6,7 +6,7 @@ import promira_py as pm
 from promactive_msg import promactMessages
 import array
 
-import cmd_protocol as protocol
+import cmd_protocol_2 as protocol
 import test_utility as testutil
 
 
@@ -32,6 +32,8 @@ class spiIO:
 
   
   m_spi_clock_kHz   = None
+  m_actual_spi_clock_kHz = None
+  m_spi_clock_actual= None
   m_spi_clock_mode  = None
   m_spi_ss_polarity = None
   
@@ -85,6 +87,7 @@ class spiIO:
     
         cls.discoverDevice(cls)
         cls.m_spi_initialized = False
+        cls.m_spi_clock_actual=[]
         return cls._instance
 
     
@@ -151,9 +154,9 @@ class spiIO:
     pmact.ps_queue_clear(signal_queue)
     pmact.ps_queue_spi_oe(signal_queue, 0x01)
     for _ndx in range(2):
-      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 32, 0x99)
-      pmact.ps_queue_delay_ms(signal_queue, 10)
-      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 32, 0xFF)
+      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 32, 0xAA)
+      pmact.ps_queue_delay_ms(signal_queue, 250)
+      pmact.ps_queue_spi_write_word(signal_queue, protocol.SPIIO_SINGLE, 8, 32, 0x91)
     pmact.ps_queue_spi_oe(signal_queue, 0x00)
         
     self.m_in_signal_event=True
@@ -166,8 +169,28 @@ class spiIO:
 
   def resetClkKHz(self, clk_kHz):
     self.m_spi_clk_kHz=clk_kHz
-    return self.initSpiMaster()
+    self.initSpiMaster()
+    return self.m_actual_spi_clock_kHz
           
+  def actualSpiClockKhz(self): 
+    if self.m_promira_open:
+      return self.m_actual_spi_clock_kHz
+    return None
+        
+  def actualSpiClockLookup(self, parameter):
+    if len(self.m_spi_clock_actual)>0:
+      for set_act in self.m_spi_clock_actual:
+        if set_act[0]==parameter:
+          return set_act[1]
+              
+  def updateSpiClockActual(self, setting, actual):
+    if len(self.m_spi_clock_actual)>0:
+      for set_act in self.m_spi_clock_actual:
+        if set_act[0]==setting:
+          return 
+        else:
+          self.m_spi_clock_actual.append([setting, actual])
+
   def initSpiMaster(self, parameters=None):
     # (configVal.spiConfiguration)
     if parameters!=None:
@@ -199,7 +222,7 @@ class spiIO:
     # Power the target device with none, one or two power sources
     self.setTargetpower(self.m_spi_tgt_v1_fixed, self.m_spi_tgt_v2_var)
 
-    pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
+    self.m_actual_spi_clock_kHz=pmact.ps_spi_bitrate(self.m_channel_handle, self.m_spi_clk_kHz)
     
     #configure static spi parameters
     _retval=pmact.ps_spi_configure( self.m_channel_handle,
@@ -298,6 +321,7 @@ class spiIO:
           print("Error code = %d" % self.m_channel_handle)
           sys.exit()
   
+      self.m_promira_open=True
       return self.m_psp_handle, self.m_app_conn_handle, self.m_channel_handle
   
   
@@ -313,6 +337,7 @@ class spiIO:
       pmact.ps_channel_close(self.m_channel_handle)
       pmact.ps_app_disconnect(self.m_app_conn_handle)
       pm.pm_close(self.m_psp_handle)
+      self.m_promira_open=False
 
   def devResetOpen(self):
     self.devClose()
@@ -322,12 +347,11 @@ class spiIO:
     self.devClose()
 
 
-  debug_devCollect = True
+  m_debug_devCollect = False
   def procDevCollect (self, collect):
 
     response_length=0
     fatal_error=False
-
     
     '''
     collect intermediate results until:
@@ -342,26 +366,28 @@ class spiIO:
     '''
     while True:
         t, _length, result = pmact.ps_collect_resp(collect, 1000)
-
-        if self.debug_devCollect:
+        resp_msg=None
+        if self.m_debug_devCollect:
           #****DEBUG****
           found, resp_msg=self.m_pm_msg.getResponseMessage(t)
           if found:
-            self.m_testutil.bufferDetailInfo("in devCollect(): %s" % resp_msg)
+            if self.m_debug_devCollect:
+              self.m_testutil.bufferDetailInfo("in devCollect(): %s" % resp_msg)
           else:
-            result_msg=self.m_pm_msg.getResultString(t)
-            self.m_testutil.bufferDetailInfo("in devCollect(): %s" % result_msg )
+            resp_msg=self.m_pm_msg.getResultString(t)
+            if self.m_debug_devCollect:
+              self.m_testutil.bufferDetailInfo("in devCollect(): %s" % resp_msg )
         
         if t == pmact.PS_APP_NO_MORE_CMDS_TO_COLLECT:
           break
         
         if t < 0:
           fatal_error=True
-          return t, result_msg, fatal_error
+          return t, resp_msg, fatal_error
           
         if t == pmact.PS_SPI_CMD_READ:
             _ret, _word_size, buf = pmact.ps_collect_spi_read(collect, result)
-            if self.debug_devCollect:
+            if self.m_debug_devCollect:
               input_msg="PS_SPI_CMD_READ len: "+str(_ret)+"  "+str(type(buf))
               self.m_testutil.bufferDetailInfo(input_msg)
             response_length+= len(buf)
@@ -375,7 +401,8 @@ class spiIO:
     return _ret, buf, fatal_error
   
   def devCollect(self, collect):
-    self.m_testutil.bufferDetailInfo("in devCollect(): collect handle = %d" % collect)
+    if self.m_debug_devCollect:
+      self.m_testutil.bufferDetailInfo("in devCollect(): collect handle = %d" % collect)
     
     _ret, buf, fatal_error = self.procDevCollect(collect)
     
@@ -443,7 +470,8 @@ class spiIO:
 
 
     def submitQueue(queue_handle, channel_handle, ctrlID):
-      self.m_testutil.bufferDetailInfo(" queue_handle %d ; channel_handle %d ; ctrlID %d" 
+      if self.m_debug_devCollect:
+        self.m_testutil.bufferDetailInfo(" queue_handle %d ; channel_handle %d ; ctrlID %d" 
                                         % (queue_handle, channel_handle, ctrlID))
       collect, _dc = pmact.ps_queue_submit(queue_handle, channel_handle, ctrlID)
       if collect < 0:
@@ -465,7 +493,7 @@ class spiIO:
     
     
     #****DEBUG****
-    if self.debug_devCollect:
+    if self.m_debug_devCollect:
       cmd_msg="cmd_byte= %02x" % cmd_byte
       if self.m_testutil.traceEnabled():
         self.m_testutil.bufferDetailInfo(cmd_msg)
@@ -589,15 +617,16 @@ class spiIO:
     address phase
     '''
     if (spi_session.isAddressPhase()==True):
-      # Assemble write command and address
+      # Assemble address byte array per phase.length
       phase=spi_session.currentSpiPhase()
-      
+
       data_out=pmact.array_u08(phase.length)
-      if phase.length==3:
-        data_out[-3]=(address>>16)&0xff
-      data_out[-2]=(address>>8)&0xff
-      data_out[-1]=address&0xff
-        #pmact.ps_queue_spi_ss(session_queue, self.m_ss_mask)
+      address_shifter=address
+      for ndx in range(phase.length):
+        data_out[phase.length-1-ndx]=address_shifter&0xff
+        address_shifter=address_shifter>>8
+
+      #pmact.ps_queue_spi_ss(session_queue, self.m_ss_mask)
       pmact.ps_queue_spi_write(session_queue,
                                phase.mode,
                                8,
@@ -696,7 +725,6 @@ class spiIO:
         #pmact.ps_queue_delay_ms(session_queue, 1)
           
         collect = submitQueue(session_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)
-        self.m_testutil.bufferDetailInfo("Write collect handle = %d" % collect)
         _in_length, _in_buf = self.devCollect(collect)
         pmact.ps_queue_destroy(session_queue)
         
@@ -715,8 +743,9 @@ class spiIO:
         pmact.ps_queue_spi_oe(session_queue, 0)
         
         
-        collect = submitQueue(session_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE)        
-        self.m_testutil.bufferDetailInfo("Read collect handle = %d" % collect)
+        collect = submitQueue(session_queue, self.m_channel_handle, pmact.PS_MODULE_ID_SPI_ACTIVE) 
+        if self.m_debug_devCollect:       
+          self.m_testutil.bufferDetailInfo("Read collect handle = %d" % collect)
         if collect < 0:
           self.m_testutil.fatalError("Failed Read Queue Submission: collect handle = %d" % collect)
 
