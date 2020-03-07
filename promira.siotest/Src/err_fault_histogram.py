@@ -203,6 +203,7 @@ class parameterizedErrorHistogram(object):
 
     m_singval_col_hdr="1-Val"
     m_promira_error_col_hdr="Prmra"
+    m_actual_clock_col_hdr="KHz"
     
     def columnWidth(self):
       minimum_width=len(self.m_singval_col_hdr)+2

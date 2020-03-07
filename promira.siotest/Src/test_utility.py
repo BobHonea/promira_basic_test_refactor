@@ -85,7 +85,15 @@ class testUtil:
     else:
       print(fatal_msg)
     sys.exit(-1)
-
+    
+  def flushLogfileBuffer(self):
+    if len(self.m_file_log_buffer) > 0:
+      for line in self.m_file_log_buffer:
+        self.m_log_file.write(line+"\n")
+        
+      self.m_file_log_buffer=[]
+      self.m_file_log_buffer_lines=0
+    
   def openLogfile(self, file_path):
     datetime_string=time.strftime("%Y%m%d-%H%M%S")
     file_name="SpiReadTest_%s.log" % datetime_string
@@ -107,7 +115,7 @@ class testUtil:
     '''
   
   def closeLogFile(self):
-    self.flushLogBuffer()
+    self.flushLogfileBuffer()
     self.m_log_file.close()
 
   def enableLogfile(self):
@@ -130,20 +138,7 @@ class testUtil:
       self.flushLogfileBuffer()
       self.m_file_log_buffer_lines=0
   
-  def flushLogfileBuffer(self):
-    if len(self.m_file_log_buffer) > 0:
-      #try:
-      for line in self.m_file_log_buffer:
-        self.m_log_file.write(line+"\n")
-        
-      self.m_file_log_buffer=[]
-      self.m_file_log_buffer_lines=0
 
-      #except IOError as e:
-      #  self.fatalError("File Write Fail: %s" % e)
-
-      #finally:
-      return
   
 
   def traceEnabled(self):

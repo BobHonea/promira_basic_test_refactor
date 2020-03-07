@@ -84,12 +84,29 @@ from promact_is_py import array_u08
 
 
 
+
 #==========================================================================
 # CONSTANTS
 #==========================================================================
 BUFFER_SIZE = 65535
 INTERVAL_TIMEOUT = 500
 
+
+
+def hotkeyReceived():
+  global hotkey_received
+  hotkey_received=True
+  print("\nHOTKEY " + str(hotkey_received))
+
+def initHotKey(hotkey):
+    global hotkey_received
+    hotkey_received=False
+    keybd.add_hotkey(hotkey, lambda: hotkeyReceived())
+
+  
+def scriptTermination():
+  global hotkey_received
+  return hotkey_received
 
 
 #==========================================================================
@@ -213,6 +230,47 @@ class promiraSpiTestApp(usertest.SwUserTest):
       write_index+=1
       array_sequence.nextIndex()
         
+  def patternWriteDevice(self, eepromConfig, pattern_array_sequence):
+
+    eeprom_unlocked=self.m_eepromAPI.unlockDevice()
+    
+    '''
+    write data pattern to entire eeprom
+    '''
+    if eeprom_unlocked:
+
+      self.m_spiio.resetClkKHz(25000)
+      pattern_start_byte_address=0
+      memsize_MB=eepromConfig.memsize/(1024*1024)
+      ### OVERRIDE
+      program_memsize_MB=memsize_MB
+      #program_memsize_MB=memsize_MB/1024
+      ### OVERRIDE
+      
+
+      program_byte_size=int(program_memsize_MB*1024*1024)
+      program_block_size=int(program_byte_size/128)
+      if program_block_size<256:
+          self.m_testutil.fatalError("program block size < 256")
+          
+      program_block_count=program_byte_size//program_block_size
+      
+      '''
+      perform VERIFIED write of entire eeprom
+      '''
+      for program_block in range(program_block_count):
+        pattern_start_byte_address=int(program_block*program_block_size)
+        pattern_end_byte_address=pattern_start_byte_address+program_block_size-1
+        self.writeDevicePattern(pattern_start_byte_address, program_block_size, pattern_array_sequence, True)
+        print("Write Complete [x%08x to x%08x]" % ( pattern_start_byte_address, pattern_end_byte_address ))
+
+      print("Device Pattern Write Complete!")
+
+    else:
+      self.m_testutil.fatalError("patternWriteDevice(): EEPROM Unlock Failed")
+
+
+    pass
   
   def readTest(self, read_cmd_byte, cmd_namestring, address, length, pattern_array, verbose):
     rxdata_array = self.m_testutil.zeroedArray(self.m_eepromAPI.EEPROM_PAGE_SIZE)
@@ -397,7 +455,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
       return False
     
 
-  
+  def hotkeyTestTermination(self):
+    hotkey_termination=True
     
   def runTest(self):
     
@@ -408,7 +467,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     pattern_array_sequence=self.m_testutil.referenceArraySequence(self.m_testutil.m_ref_array_list)    
 
     verbose=False
-    write_data = False
+    write_device_pattern = False
     
     enable_single_iowidth_read    = True
     enable_hs_single_iowidth_read = False
@@ -453,7 +512,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     
 
     self.m_single_valued_failure=0
-    eeprom_unlocked=False
+
     auto_vernier_cycle_count=0
 
     
@@ -471,7 +530,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
     '''
 
     
-    error_buckets=[0, 1, 4, 8, 16, 32, 64, 128, 256, 257, 258 ]
+    error_buckets=[0, 1, 4, 8, 16, 32, 64, 128, 256, 257, 258, 259]
 
 
     self.m_histogram=parameterizedErrorHistogram(
@@ -581,42 +640,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
     self.m_testutil.displayTraceOn()
   
   
-  
-    if write_data and (not eeprom_unlocked):
-      eeprom_unlocked=self.m_eepromAPI.unlockDevice()
-      if not eeprom_unlocked:
-        self.m_testutil.fatalError("Eeprom Write Failed")
-
-    '''
-    write data pattern to entire eeprom
-    '''
-    if write_data and eeprom_unlocked:
-
-      self.m_spiio.resetClkKHz(25000)
-      pattern_start_byte_address=0
-      ### OVERRIDE
-      program_memsize_MB=memsize_MB
-      #program_memsize_MB=memsize_MB/1024
-      ### OVERRIDE
-      
-
-      program_byte_size=int(program_memsize_MB*1024*1024)
-      program_block_size=int(program_byte_size/128)
-      if program_block_size<256:
-          self.m_testutil.fatalError("program block size < 256")
-          
-      program_block_count=program_byte_size//program_block_size
-      
-      '''
-      perform VERIFIED write of entire eeprom
-      '''
-      for program_block in range(program_block_count):
-        pattern_start_byte_address=int(program_block*program_block_size)
-        pattern_end_byte_address=pattern_start_byte_address+program_block_size-1
-        self.writeDevicePattern(pattern_start_byte_address, program_block_size, pattern_array_sequence, True)
-        print("Write Complete [x%08x to x%08x]" % ( pattern_start_byte_address, pattern_end_byte_address ))
-
-      print("Device Pattern Write Complete!")
+    if write_device_pattern:
+      self.patternWriteDevice(eepromConfig, pattern_array_sequence)
     #if verbose and first_loop:
     #  self.m_testutil.printArrayHexDump("EEProm (Written) Pattern", txdata_array)
     
@@ -649,8 +674,9 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
 
     trial_monitor=self.testMonitor(self.CRITERIA_GENERAL, control.sufficient_command_tests_per_trial)
+    initHotKey("ctrl + alt + x")
     
-    while not trial_monitor.testComplete():
+    while not scriptTermination() and not trial_monitor.testComplete() :
       '''
       Test all configurations
       '''
@@ -670,7 +696,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
         one_config_test_complete=False
         
         
-        while not one_config_test_complete: 
+        while not one_config_test_complete and not scriptTermination(): 
           #configuration test loop       
           try:
 
@@ -685,6 +711,8 @@ class promiraSpiTestApp(usertest.SwUserTest):
             self.m_spiio.initSpiMaster(spi_parameters)
             time.sleep(.01)
             clock_kHz=spi_parameters.clk_kHz
+            
+            self.m_histogram.updateTrueParameter(clock_kHz, self.m_spiio.actualSpiClockKhz())
       
             pattern_array_sequence.setIndex(0)
             sector_address=pattern_array_sequence.firstAddress()
@@ -751,7 +779,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
                     eeprom_test_address=0
                   
                   if not test_pass:
-                    if spi_parameters.clk_kHz <= 20000:
+                    if spi_parameters.clk_kHz <= 20000  and single_valued:
                       self.m_spiio.signalEvent()
                     self.m_testutil.bufferDetailInfo("FAILURE @ %d KHz" % (spi_parameters.clk_kHz), False)
                     self.m_testutil.bufferDetailInfo("subtest iteration #"+str(subtest_monitor.resultCount())+" of " +
@@ -835,6 +863,6 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
             
     self.m_testutil.closeLogFile()
-          
+    print("Program Terminated")
           
           
