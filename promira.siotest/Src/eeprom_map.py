@@ -177,13 +177,9 @@ class deviceMap(object):
     else:
       return sector_status
   
-    
-  m_left_bits = [ 0x0001, 0x0003, 0x0007, 0x000f, 0x001f, 0x003f,
-                  0x007F, 0x00FF, 0x01ff, 0x03ff, 0x07ff, 0x0fff,
-                  0x1fff, 0x3fff, 0x7fff, 0xffff ]
-  m_right_bits= [ 0xffff, 0xfffe, 0xfffc, 0xfff8, 0xfff0, 0xffe0,
-                  0xffc0, 0xff80, 0xff00, 0xfe00, 0xfc00, 0xf800,
-                  0xf000, 0xe000, 0xc000, 0x8000 ]
+  m_left_bits = [ (0xffffffff & (0xffffffff << bitshift)) for bitshift in range(32)]  
+  m_right_bits= [ (0xffffffff & (0xffffffff >> bitshift)) for bitshift in range(32)]
+  
   
   def _bitsMask(self, start_bit, end_bit):
     bits= self.m_right_bits[start_bit]&self.m_left_bits[end_bit]
@@ -421,9 +417,9 @@ class eepromTest(object):
     return
 
 
-#eeprom_test=eepromTest(MICRON_EEPROM_BLOCKS)
-#eeprom_test.doMapTest()
-#print ("MICRON MAP Test Success")
+eeprom_test=eepromTest(MICRON_EEPROM_BLOCKS)
+eeprom_test.doMapTest()
+print ("MICRON MAP Test Success")
 
 #eeprom_test=eepromTest(MICROCHIP_EEPROM_BLOCKS)
 #eeprom_test.doMapTest()

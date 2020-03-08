@@ -77,10 +77,10 @@ class spiIO:
         
         cls.m_ss_mask = 0x1
         cls.m_device = None
-        cls.m_devices    = pmact.array_u16(4)
-        cls.m_device_ids = pmact.array_u32(4)
-        cls.m_device_ips = pmact.array_u32(4)
-        cls.m_device_status = pmact.array_u32(4)
+        cls.m_devices    = testutil.array_u16(4)
+        cls.m_device_ids = testutil.array_u32(4)
+        cls.m_device_ips = testutil.array_u32(4)
+        cls.m_device_status = testutil.array_u32(4)
     
         cls.m_spi_configuration = None #cls.m_configMgr.firstConfig()
         cls.m_timeout_ms = 1000  # arbitrary 10 second value 
@@ -141,7 +141,7 @@ class spiIO:
       return
     
     #signal_ss_polarity  = (self.m_spi_ss_polarity) &0xf    
-    data_out=pmact.array_u08(1)
+    data_out=testutil.array_u08(1)
     data_out[0]=0xAA
     #invert chip select polarity, send a byte
     _retval=pmact.ps_spi_configure( self.m_channel_handle,
@@ -428,7 +428,7 @@ class spiIO:
   
   def buildBusyTestQueues(self, read_status_cmd):
     
-      read_status=pm.array_u08(1)
+      read_status=testutil.array_u08(1)
       read_status[1]=read_status_cmd
       
       '''
@@ -620,7 +620,7 @@ class spiIO:
       # Assemble address byte array per phase.length
       phase=spi_session.currentSpiPhase()
 
-      data_out=pmact.array_u08(phase.length)
+      data_out=testutil.array_u08(phase.length)
       address_shifter=address
       for ndx in range(phase.length):
         data_out[phase.length-1-ndx]=address_shifter&0xff

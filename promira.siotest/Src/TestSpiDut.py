@@ -55,8 +55,7 @@ from __future__ import division, with_statement, print_function
 #==========================================================================
 # IMPORTS
 #==========================================================================
-import usertest
-import promact_is_py as pmact
+#import usertest
 from eeprom_2 import eepromAPI
 #import eeprom_map
 import cmd_protocol_2 as protocol
@@ -70,7 +69,7 @@ import keyboard as keybd
 #from result_histogram import result2DHistogram
 #from error_histogram import parameterizedErrorHistogram
 from err_fault_histogram import parameterizedErrorHistogram
-from promact_is_py import array_u08
+
 
 
 
@@ -115,7 +114,8 @@ def scriptTermination():
 
   
 
-class promiraSpiTestApp(usertest.SwUserTest):
+#class promiraSpiTestApp(usertest.SwUserTest):
+class promiraSpiTestApp(object):
   """Unit test template"""
   
     
@@ -140,10 +140,10 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
     self.m_pagesize     = eepromAPI.EEPROM_PAGE_SIZE
 
-    #block_protect_bitmap  = pmact.array_u08(18)
-    self.m_rxdata_array           = pmact.array_u08(self.m_pagesize)
-    self.m_txdata_array           = pmact.array_u08(self.m_pagesize)
-    self.m_random_page_array      = pmact.array_u08(self.m_pagesize)
+    #block_protect_bitmap  = testutil.array_u08(18)
+    self.m_rxdata_array           = testutil.array_u08(self.m_pagesize)
+    self.m_txdata_array           = testutil.array_u08(self.m_pagesize)
+    self.m_random_page_array      = testutil.array_u08(self.m_pagesize)
     
     self.m_configVal      = spicfg.configVal()
     return
@@ -204,7 +204,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       page_address=start_page_address+(write_index * array_sequence.pageSize())
       pattern_array=array_sequence.arrayAtAddress(page_address)
       if verify:
-        rxdata_array=array_u08(array_sequence.pageSize())
+        rxdata_array=testutil.array_u08(array_sequence.pageSize())
 
       
       # need to catch promira adapter faults
@@ -230,6 +230,14 @@ class promiraSpiTestApp(usertest.SwUserTest):
       write_index+=1
       array_sequence.nextIndex()
         
+
+  '''
+  patternWritedevice()
+  
+    perform a VERIFIED write of the ENTIRE eeprom device.
+    Sequence of operations:  erase/write/read-verify
+    
+  '''
   def patternWriteDevice(self, eepromConfig, pattern_array_sequence):
 
     eeprom_unlocked=self.m_eepromAPI.unlockDevice()
@@ -272,6 +280,15 @@ class promiraSpiTestApp(usertest.SwUserTest):
 
     pass
   
+  
+  
+  '''
+  readTest()
+  
+    Read a page of memory, compare it to a data pattern
+    data pattern selection is address dependent
+    on miscompare, hexdump the results to log and/or display
+  '''
   def readTest(self, read_cmd_byte, cmd_namestring, address, length, pattern_array, verbose):
     rxdata_array = self.m_testutil.zeroedArray(self.m_eepromAPI.EEPROM_PAGE_SIZE)
     self.m_eepromAPI.waitUntilNotBusy()
@@ -455,8 +472,7 @@ class promiraSpiTestApp(usertest.SwUserTest):
       return False
     
 
-  def hotkeyTestTermination(self):
-    hotkey_termination=True
+
     
   def runTest(self):
     

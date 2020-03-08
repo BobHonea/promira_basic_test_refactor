@@ -6,5 +6,6 @@
 <path>/${PROJECT_DIR_NAME}/promira.siotest/SerialPlatformAPI_Promact_IS</path>
 <path>/${PROJECT_DIR_NAME}/promira.siotest/SerialPlatformAPI_Promira</path>
 <path>/${PROJECT_DIR_NAME}/promira.siotest/Src</path>
+<path>/${PROJECT_DIR_NAME}/promira.siotest/SerialPlatformAPI_Aardvark</path>
 </pydev_pathproperty>
 </pydev_project>

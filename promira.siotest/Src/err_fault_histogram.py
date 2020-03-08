@@ -6,7 +6,6 @@ Created on Feb 10, 2020
 
 import test_utility
 import numpy as np
-import promira
 
 
 '''

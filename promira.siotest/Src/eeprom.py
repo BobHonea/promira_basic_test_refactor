@@ -144,7 +144,7 @@ class eepromAPI:
     return
   
   def readStatusRegister(self):
-    data_array = pmact.array_u08(1)
+    data_array = testutil.array_u08(1)
     
     spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RDSR,
                                                             None,
@@ -257,7 +257,7 @@ class eepromAPI:
   '''
   
   def readBlockProtectBitmap(self):
-    self.m_block_protect_bitmap = pmact.array_u08(18)
+    self.m_block_protect_bitmap = testutil.array_u08(18)
     spi_result = self.m_spiio.spiMasterMultimodeCmd(protocol.SPICMD_RBPR,
                                                             None, len(self.m_block_protect_bitmap),
                                                             self.m_block_protect_bitmap)
