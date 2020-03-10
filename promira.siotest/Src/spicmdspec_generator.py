@@ -67,7 +67,74 @@ IOTYPE_NODATA=0
 IOTYPE_READ=1
 IOTYPE_WRITE=2
 
+class compactTypedList(object):
+  
+  def __init__(self, itemType):
+    self.m_list=[] 
+    self.m_index=None
+    self.m_item_type=itemType
+    
+  def submitItem(self, item):
+    if isinstance(item, self.m_item_type):
+      if item not in self.m_list:
+        self.m_list.append(item)
+        return True
+    return False
 
+  def stored(self, item):
+    if isinstance(item, self.m_item_type):
+      return item in self.m_list
+    return False
+
+  def firstItem(self):
+    self.m_index=0
+    return self.nextItem()
+  
+  def nextItem(self):
+    index=self.m_index
+    self.m_index+=1
+    return self.m_list[index]
+
+  def count(self):
+    return len(self.m_list)
+  
+
+class keyedCompactTypedLists(object):
+  
+  def __init__(self, key_list, type_list):
+    self.m_keys=key_list
+    self.m_index_range=range(len(key_list))
+    self.m_compact_lists=[ compactTypedList(type_list[_ndx]) for _ndx in self.m_index_range]
+
+  def listCount(self):
+    return len(self.m_compact_lists)
+
+  def listKeyIndex(self, key):
+    if key in self.m_keys:
+      return self.m_keys.index(key)
+
+  def fetchList(self, key ):
+    return(self.m_compact_lists[self.listKeyIndex(key)])
+
+  def submitItem(self, item, key):
+    return(self.fetchList(key).submitItem(item))
+    
+  def indexSubmitItem(self, item, index):
+    return(self.m_compact_lists[index].submitItem(item))
+      
+  def stored(self, item, key):
+    return(self.fetchList(key).stored())
+  
+  def firstItem(self, item, key):
+    return(self.fetchList(key).firstItem())
+  
+  def nextItem(self, key):
+    return(self.fetchList(key).nextItem())
+
+  def count(self, key):
+    return(self.fetchList(key).count())
+    
+    
 class spiDescriptorApi(object):
 
 
@@ -285,72 +352,7 @@ class spiDescriptorApi(object):
   _iotype_string  = ['nodata', 'read', 'write']
   _iotype_code    = [ IOTYPE_NODATA, IOTYPE_READ, IOTYPE_WRITE]
 
-  class compactTypedLists(object):
-    
-    def __init__(self, itemType):
-      self.m_list=[] 
-      self.m_index=None
-      self.m_item_type=itemType
-      
-    def submitItem(self, item):
-      if isinstance(item, self.m_item_type):
-        if item not in self.m_list:
-          self.m_list.append(item)
-          return True
-      return False
 
-    def stored(self, item):
-      if isinstance(item, self.m_item_type):
-        return item in self.m_list
-      return False
-
-    def firstItem(self):
-      self.m_index=0
-      return self.nextItem()
-    
-    def nextItem(self):
-      index=self.m_index
-      self.m_index+=1
-      return self.m_list[index]
-
-    def count(self):
-      return len(self.m_list)
-    
-
-  class compactKeyedLists(object):
-    
-    def __init__(self, key_list, type_list):
-      self.m_keys=key_list
-      self.m_index_range=range(len(key_list))
-      self.m_compact_lists=[ self.compactList(type_list[_ndx]) for _ndx in self.m_index_range]
-
-    def listCount(self):
-      return len(self.m_compact_lists)
-
-    def listKeyIndex(self, key):
-      if key in self.m_keys:
-        return self.m_keys.index(key)
-
-    def fetchList(self, key ):
-      return(self.m_compact_lists[self.listKeyIndex(key)])
-
-    def submitItem(self, item, key):
-      return(self.fetchList(key).submitItem(item))
-      
-    def indexSubmitItem(self, item, index):
-      return(self.m_compact_lists[index].submitItem(item))
-        
-    def stored(self, item, key):
-      return(self.fetchList(key).stored())
-    
-    def firstItem(self, item, key):
-      return(self.fetchList(key).firstItem())
-    
-    def nextItem(self, key):
-      return(self.fetchList(key).nextItem())
-
-    def count(self, key):
-      return(self.fetchList(key).count())
 
       
       
@@ -363,14 +365,12 @@ class spiDescriptorApi(object):
     '''
     discover unique phase descriptor tuplets for each data width mode
     '''
-    phase_data_columns=[self.m_cmd_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]
-    phase_data_types=[ list for _ndx in phase_data_columns]
-    
+   
     phase_descriptor_columns=[self.m_cmd_ndx, self.m_addrcycles_ndx, self.m_dummycycles_ndx, self.m_datamincycles_ndx, self.m_datamaxcycles_ndx]
     phase_descriptor_types=[busyPhx, wrenPhx, cmdPhx, addrPhx, dummyPhx, dataPhx]
 
     #self.m_phase_data_lists=self.compactTypedLists(phase_data_columns, phase_data_types)
-    self.m_phase_descriptor_lists=self.compactKeyedLists(phase_descriptor_columns, phase_descriptor_types)
+    self.m_phase_descriptor_lists=keyedCompactTypedLists(phase_descriptor_columns, phase_descriptor_types)
 
       
     self.m_command_set = []
@@ -381,8 +381,9 @@ class spiDescriptorApi(object):
       store unique combinations session phase parameters in 
       - session specific lists
     '''
-    row_ndx=0
-    for row in self.m_descriptor_data:
+    for row_ndx in range(len(self.m_descriptor_data)):
+      row = self.m_descriptor_data[row_ndx]
+      
       for mode in [[self.m_spimode_ndx, 1], [self.m_sqimode_ndx,4]]:
         # use the implicit io mode (single/quad)
         if row[mode[0]]=='':
@@ -467,7 +468,6 @@ class spiDescriptorApi(object):
               self.m_phase_descriptor_tuplets[value_ndx].append(row[value_ndx])
               
 
-          row_ndx+=1
 
   '''
   generateTransactionSpecs
@@ -481,7 +481,10 @@ class spiDescriptorApi(object):
     These specs are used by the multimode SPI cmd processor.
     
   '''
-  def generateTransactionSpecs(self):            
+  def generateTransactionSpecs(self):     
+    
+    
+      
     '''
     process datacycle value-pair [datamin, datamax]
     '''
@@ -557,16 +560,16 @@ class spiDescriptorApi(object):
     for transaction in self.m_descriptor_data:
       
       def getPhaseAttributes(default_mode, phase_ndx):
-        entry=transaction[phase_ndx]
-        burst=None
-        iowidth=default_mode
-        if type(entry)==list:
-          cycles=entry[0]
-          if entry[1] in self._iowidth_code:
-            iowidth=self._iowidth_value[self._iowidth_code.index(entry[1])]
-          elif entry[1]==self._burstread:
-            burst=True
-        return iowidth, cycles, burst
+          entry=transaction[phase_ndx]
+          burst=None
+          iowidth=default_mode
+          if type(entry)==list:
+            cycles=entry[0]
+            if entry[1] in self._iowidth_code:
+              iowidth=self._iowidth_value[self._iowidth_code.index(entry[1])]
+            elif entry[1]==self._burstread:
+              burst=True
+          return iowidth, cycles, burst 
 
 
       modes=[]
