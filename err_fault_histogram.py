@@ -9,6 +9,8 @@ import numpy as np
 from _random  import Random
 import collections as coll
 import math
+import time
+import os
 
 '''
 parameterizedErrorHistorgram
@@ -454,11 +456,13 @@ class eventTimeLine(object):
   EVTSCALE_EXP        = 2
   EVTSCALE_LOG        = 3
   EVTSCALE_ROOT       = 4
+  EVTSCALE_LENSE      = 5
 
   m_linear_interval   = None
   m_exp_interval      = None
   m_log_interval      = None
   m_poly_interval     = None
+  m_lense_interval    = None
   m_interval_buckets  = None
   m_display_events    = None
   m_display_range     = None
@@ -531,6 +535,15 @@ class eventTimeLine(object):
     for index in self.m_display_range:
       interval_endpoints.append(int(k*(index**poly_power)))
     self.m_poly_interval=self.computeIntervals(interval_endpoints)
+    
+    '''
+    lense interval
+    '''
+    # on interval 0, Xmax
+    # y(u(0))=-Ymax ; y(u(X))=Ymax
+    # u(0)=- k*.999*pi/2; u(Xmax)= k*999*pi/2
+    #y=tan((pi/2)-kx)=tan(k(x-X/2); kX=pi/2;
+     
   
 
   def selectInterval(self, scale_type):
@@ -562,6 +575,8 @@ class eventTimeLine(object):
       move events to 'next' bucket when its age exceeds the bucket limit
       
   '''
+
+
   def ageEvents(self, current_sequence_number, interval):
     
     for index in self.m_rev_display_range:
@@ -577,7 +592,44 @@ class eventTimeLine(object):
           pop_event=self.m_display_buckets[prev_index].pop(evt_index)
           self.m_display_buckets[index].insert(0, pop_event)
 
+  '''
+  'lensing' event display metric
+       each distribution has sparse and dense regions of display
+       these regions are reflected in the display intervals
+       rotating the sequence_number width of the buckets, then
+       redistributing the events among the buckets effects a
+       lensing effect, which can move the focus of the display.
+  '''
+  def distributeEvents(self, interval):
+    for event in self.m_display_events:
+      for interval in self.m_interval_buckets:
+        pass
+      
+    for index in self.m_rev_display_range:
+      prev_index=index-1
+      if prev_index<0:
+        break
+
+      for evt_index in range(len(self.m_display_buckets[prev_index])):
+        event=self.m_display_buckets[prev_index][evt_index]
+        event_entry_time=event.sequence_number
+        event_age=current_sequence_number-event_entry_time
+        if event_age > interval[prev_index][1]:
+          pop_event=self.m_display_buckets[prev_index].pop(evt_index)
+          self.m_display_buckets[index].insert(0, pop_event)    
+    pass
   
+    
+  def rotateInterval(self, steps, left_not_right, interval):
+    if left_not_right:
+      left_intervals=interval[steps:]
+      rotated_intervals=left_intervals+interval[:steps]
+    else:
+      right_intervals=interval[:-steps]
+      rotated_intervals=interval[-steps:]
+
+    return rotated_intervals
+    
   def displayEvents(self, scale_type, current_sequence_number):
     interval=self.selectInterval(scale_type)
     self.ageEvents(current_sequence_number, interval)
@@ -606,11 +658,11 @@ class eventTimeLine(object):
 
 randobj=Random()
 randobj.seed(0)
-timeline=eventTimeLine(80, 100000, eventTimeLine.EVTSCALE_ROOT)
+timeline=eventTimeLine(120, 100000, eventTimeLine.EVTSCALE_ROOT)
 
 for sequence in range(100000):
   rand_int=randobj.getrandbits(12)
-
+  
   if rand_int==0:
     timeline.addEvent(eventTimeLine.EVT_LOWFREQ_1VAL, 15, sequence)
   elif rand_int==1:
@@ -619,8 +671,10 @@ for sequence in range(100000):
     timeline.addEvent(eventTimeLine.EVT_PROMIRA_ERR, 15, sequence)
   
   if sequence % 10 == 0:
+    time.sleep(.001)
+    print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
     timeline.displayEvents(eventTimeLine.EVTSCALE_EXP, sequence)
-
+  
       
 
   
