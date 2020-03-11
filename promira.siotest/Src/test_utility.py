@@ -12,15 +12,15 @@ from _random import Random
 # HELPER FUNCTIONS
 #==========================================================================
 def array_u08 (n):  return array.ArrayType('B', [0]*n)
-def array_u16 (n):  return array('H', [0]*n)
-def array_u32 (n):  return array('I', [0]*n)
-def array_u64 (n):  return array('K', [0]*n)
-def array_s08 (n):  return array('b', [0]*n)
-def array_s16 (n):  return array('h', [0]*n)
-def array_s32 (n):  return array('i', [0]*n)
-def array_s64 (n):  return array('L', [0]*n)
-def array_f32 (n):  return array('f', [0]*n)
-def array_f64 (n):  return array('d', [0]*n)
+def array_u16 (n):  return array.ArrayType('H', [0]*n)
+def array_u32 (n):  return array.ArrayType('I', [0]*n)
+def array_u64 (n):  return array.ArrayType('K', [0]*n)
+def array_s08 (n):  return array.ArrayType('b', [0]*n)
+def array_s16 (n):  return array.ArrayType('h', [0]*n)
+def array_s32 (n):  return array.ArrayType('i', [0]*n)
+def array_s64 (n):  return array.ArrayType('L', [0]*n)
+def array_f32 (n):  return array.ArrayType('f', [0]*n)
+def array_f64 (n):  return array.ArrayType('d', [0]*n)
 
 # A python program to create user-defined exception 
   

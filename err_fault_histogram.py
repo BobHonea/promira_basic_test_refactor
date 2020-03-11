@@ -6,7 +6,9 @@ Created on Feb 10, 2020
 
 import test_utility
 import numpy as np
-
+from _random  import Random
+import collections as coll
+import math
 
 '''
 parameterizedErrorHistorgram
@@ -416,3 +418,209 @@ class parameterizedErrorHistogram(object):
       
           
       pass
+
+
+
+'''
+eventTimeLine()
+   manages event-sequence data display
+   display is on a horizontal axis sorted by event
+   events occurring at the same sequence interval display in the same
+   horizontal position on the sequence (horizontal) axis
+   
+   the axis shifts in one direction with sequence-advance/time.
+   the represented width of sequence intervals narrows with sequence-time
+   as sequence intervals shift away from 'NOW', they will be combined with
+   previous sequence intervals until they are bunched in the single interval
+   furthest from 'NOW'.
+   
+   the sequence-time scale can be linear, or nonlinear.
+   
+'''
+
+DisplayedEvent=coll.namedtuple('DisplayedEvent', 'event_type event_mhz sequence_number event_count')
+  
+class eventTimeLine(object):
+
+
+  EVT_LOWFREQ_ERROR   = 1
+  EVT_LOWFREQ_1VAL    = 2
+  EVT_PROMIRA_ERR     = 3
+  
+  m_event_type_list   = [EVT_LOWFREQ_ERROR, EVT_LOWFREQ_1VAL, EVT_PROMIRA_ERR]
+  m_event_type_symbol = ["e", "s", "p"]
+  
+  EVTSCALE_LINEAR     = 1
+  EVTSCALE_EXP        = 2
+  EVTSCALE_LOG        = 3
+  EVTSCALE_ROOT       = 4
+
+  m_linear_interval   = None
+  m_exp_interval      = None
+  m_log_interval      = None
+  m_poly_interval     = None
+  m_interval_buckets  = None
+  m_display_events    = None
+  m_display_range     = None
+  m_rev_display_range = None
+  m_interval_index    = None
+  m_event_list        = None
+  
+  def __init__(self, display_width, max_sequence_number,  scale_type):
+    self.m_max_sequence_number=max_sequence_number
+    self.m_display_buckets= [ [] for bucket in range(display_width)]
+    self.m_display_range=range(len(self.m_display_buckets))
+    self.m_rev_display_range=range(len(self.m_display_buckets)-1, -1, -1)
+    self.m_display_events=[]
+    self.build_intervals()
+    self.m_scale_type=scale_type
+
+
+  def computeIntervals(self, interval_endpoints):
+    last_endpoint=0
+    interval=[]
+    for index in range (len(interval_endpoints)):
+      this_endpoint=interval_endpoints[index]
+      interval.append([last_endpoint, this_endpoint])
+      last_endpoint=this_endpoint
+    return interval
+      
+  
+  def build_intervals(self):
+    end_index=self.m_display_range[-1]
+    start_index=self.m_display_range[0]
+    final_dwell_time=self.m_max_sequence_number
+    
+    '''
+    Linear Interval
+    '''
+    # y=mx; x(end_index)=10000
+    interval_endpoints=[]
+    slope=float(final_dwell_time/end_index)
+    for index in self.m_display_range:
+      interval_endpoints.append(int(slope*index))
+    self.m_linear_interval=self.computeIntervals(interval_endpoints)
+
+    '''
+    exponential interval
+    '''
+    # y(x)=k^x; ln(y(x))=x*ln(k); e^(ln(y(x))/x)=k
+    interval_endpoints=[]
+    k=math.exp(math.log(final_dwell_time)/end_index)
+    for index in self.m_display_range:
+      interval_endpoints.append(int(k**index))
+    self.m_exp_interval=self.computeIntervals(interval_endpoints)
+
+    '''
+    log interval
+    '''
+    #y(x)=k*log(2+x); y(x)/log(2+x)=k
+    interval_endpoints=[]
+    k=final_dwell_time/math.log(2+end_index)
+    for index in self.m_display_range:
+      interval_endpoints.append(int(k*math.log(2+index)))
+    self.m_log_interval=self.computeIntervals(interval_endpoints)
+    
+    '''
+    polynomial interval
+    '''
+    poly_power=2
+    #y(x)=k*x^poly_power;y(x)/x^poly_power=k  
+    interval_endpoints=[]
+    k=final_dwell_time/(end_index**poly_power)
+    for index in self.m_display_range:
+      interval_endpoints.append(int(k*(index**poly_power)))
+    self.m_poly_interval=self.computeIntervals(interval_endpoints)
+  
+
+  def selectInterval(self, scale_type):
+    if scale_type==self.EVTSCALE_LINEAR:
+      return self.m_linear_interval
+    elif scale_type==self.EVTSCALE_EXP:
+      return self.m_exp_interval
+    elif scale_type==self.EVTSCALE_LOG:
+      return self.m_log_interval
+    else: #scale_type==self.EVTSCALE_POLY:
+      return self.m_poly_interval
+    
+      
+  def addEvent(self, event__type, event__mhz, sequence__number ):
+    event=DisplayedEvent(  event_type=event__type,
+                           event_mhz=event__mhz,
+                           sequence_number=sequence__number,
+                           event_count=1)
+    
+    self.m_display_events.append(event)
+    self.m_display_buckets[0].append(event)
+    pass
+  
+
+  
+  '''
+  shiftEvents
+      ... from timeline start towards timeline end
+      move events to 'next' bucket when its age exceeds the bucket limit
+      
+  '''
+  def ageEvents(self, current_sequence_number, interval):
+    
+    for index in self.m_rev_display_range:
+      prev_index=index-1
+      if prev_index<0:
+        break
+
+      for evt_index in range(len(self.m_display_buckets[prev_index])):
+        event=self.m_display_buckets[prev_index][evt_index]
+        event_entry_time=event.sequence_number
+        event_age=current_sequence_number-event_entry_time
+        if event_age > interval[prev_index][1]:
+          pop_event=self.m_display_buckets[prev_index].pop(evt_index)
+          self.m_display_buckets[index].insert(0, pop_event)
+
+  
+  def displayEvents(self, scale_type, current_sequence_number):
+    interval=self.selectInterval(scale_type)
+    self.ageEvents(current_sequence_number, interval)
+    
+  
+    for display_pass in self.m_event_type_list:
+      event_symbol=str(self.m_event_type_symbol[self.m_event_type_list.index(display_pass)])
+      timeline=""
+          
+      for event_list in self.m_display_buckets:
+        count=0
+        if len(event_list) > 0:
+          for event in event_list:
+            if event.event_type==display_pass:
+              count+=1
+        if count==0:
+          sym_str=(" ")
+        elif count==1:
+          sym_str=event_symbol.lower()
+        else:
+          sym_str=event_symbol.upper()
+        timeline=timeline+sym_str
+        
+      print(timeline)
+  
+
+randobj=Random()
+randobj.seed(0)
+timeline=eventTimeLine(80, 100000, eventTimeLine.EVTSCALE_ROOT)
+
+for sequence in range(100000):
+  rand_int=randobj.getrandbits(12)
+
+  if rand_int==0:
+    timeline.addEvent(eventTimeLine.EVT_LOWFREQ_1VAL, 15, sequence)
+  elif rand_int==1:
+    timeline.addEvent(eventTimeLine.EVT_LOWFREQ_ERROR, 15, sequence)
+  elif rand_int==2:
+    timeline.addEvent(eventTimeLine.EVT_PROMIRA_ERR, 15, sequence)
+  
+  if sequence % 10 == 0:
+    timeline.displayEvents(eventTimeLine.EVTSCALE_EXP, sequence)
+
+      
+
+  

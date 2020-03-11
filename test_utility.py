@@ -138,8 +138,7 @@ class testUtil:
   
   def logFileCheck(self):
     if self.logFileSize() >= self.MAX_LOGFILE_SIZE:
-
-I       self.reopenLogFile()
+      self.reopenLogFile()
   
     '''  
     except IOError as e:
