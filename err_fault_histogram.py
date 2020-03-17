@@ -425,6 +425,27 @@ class parameterizedErrorHistogram(object):
 
 '''
 eventTimeLine()
+   an animated character based Event Timeline
+   the 'time' variable is the advancing count/sequence of events
+   animation is driven by evolution as events accumulate
+   
+   an additional mechanic is a replay scroll through the display
+   
+   linear, exponential, polynomial, logarithmic scales are available
+   to provide views to focus attention on different time periods
+   of the event generation and evolution.
+   
+   in evolutionary mode:
+     the display animates as events accumulate
+
+   in replay mode:
+     the evolutionary display, events are sequentially displayed from
+     the accumulated event data-set.
+     
+   in review mode:
+     subsets of the evolutionioray sequence can be displayed in detail
+     with lensing interval metrics, expanding display in areas.
+
    manages event-sequence data display
    display is on a horizontal axis sorted by event
    events occurring at the same sequence interval display in the same
@@ -445,36 +466,38 @@ DisplayedEvent=coll.namedtuple('DisplayedEvent', 'event_type event_mhz sequence_
 class eventTimeLine(object):
 
 
+  EVT_ORIGIN          = 0
   EVT_LOWFREQ_ERROR   = 1
   EVT_LOWFREQ_1VAL    = 2
   EVT_PROMIRA_ERR     = 3
   
-  m_event_type_list   = [EVT_LOWFREQ_ERROR, EVT_LOWFREQ_1VAL, EVT_PROMIRA_ERR]
-  m_event_type_symbol = ["e", "s", "p"]
+  m_event_type_list   = [EVT_LOWFREQ_ERROR, EVT_LOWFREQ_1VAL, EVT_PROMIRA_ERR, EVT_ORIGIN]
+  m_event_type_symbol = ["e", "s", "p", '|']
   
   EVTSCALE_LINEAR     = 1
   EVTSCALE_EXP        = 2
   EVTSCALE_LOG        = 3
   EVTSCALE_ROOT       = 4
   EVTSCALE_LENSE      = 5
+  EVTSCALE_ROTATE     = 6
 
-  m_linear_interval   = None
-  m_exp_interval      = None
-  m_log_interval      = None
-  m_poly_interval     = None
-  m_lense_interval    = None
+  m_interval_table    = None
   m_interval_buckets  = None
+  m_event_buckets     = None
+  m_rotate_event_buckets = None
   m_display_events    = None
   m_display_range     = None
+  m_max_display_column= None
   m_rev_display_range = None
   m_interval_index    = None
   m_event_list        = None
   
   def __init__(self, display_width, max_sequence_number,  scale_type):
-    self.m_max_sequence_number=max_sequence_number
-    self.m_display_buckets= [ [] for bucket in range(display_width)]
-    self.m_display_range=range(len(self.m_display_buckets))
-    self.m_rev_display_range=range(len(self.m_display_buckets)-1, -1, -1)
+    self.m_max_display_column = display_width-1
+    self.m_max_sequence_number= max_sequence_number
+    self.m_event_buckets= [ [] for bucket in range(display_width)]
+    self.m_display_range=range(len(self.m_event_buckets))
+    self.m_rev_display_range=range(len(self.m_event_buckets)-1, -1, -1)
     self.m_display_events=[]
     self.build_intervals()
     self.m_scale_type=scale_type
@@ -488,9 +511,22 @@ class eventTimeLine(object):
       interval.append([last_endpoint, this_endpoint])
       last_endpoint=this_endpoint
     return interval
-      
+  
+  def buildRuler(self, interval_endpoints):
+    ruler=str('#')
+    hash_interval=self.m_max_sequence_number//10
+    next_hash=hash_interval
+    for index in range(len(interval_endpoints)):
+      if interval_endpoints[index]>next_hash:
+        ruler+='#'
+        next_hash+=hash_interval
+      else:
+        ruler+='-'
+        
+    return ruler
   
   def build_intervals(self):
+    self.m_interval_table = []
     end_index=self.m_display_range[-1]
     start_index=self.m_display_range[0]
     final_dwell_time=self.m_max_sequence_number
@@ -503,7 +539,10 @@ class eventTimeLine(object):
     slope=float(final_dwell_time/end_index)
     for index in self.m_display_range:
       interval_endpoints.append(int(slope*index))
-    self.m_linear_interval=self.computeIntervals(interval_endpoints)
+      
+    linear_interval=self.computeIntervals(interval_endpoints)
+    ruler=self.buildRuler(interval_endpoints)
+    self.m_interval_table.append([self.EVTSCALE_LINEAR, linear_interval, ruler])
 
     '''
     exponential interval
@@ -513,7 +552,10 @@ class eventTimeLine(object):
     k=math.exp(math.log(final_dwell_time)/end_index)
     for index in self.m_display_range:
       interval_endpoints.append(int(k**index))
-    self.m_exp_interval=self.computeIntervals(interval_endpoints)
+      
+    exp_interval=self.computeIntervals(interval_endpoints)
+    ruler=self.buildRuler(interval_endpoints)
+    self.m_interval_table.append([self.EVTSCALE_EXP, exp_interval, ruler])
 
     '''
     log interval
@@ -523,8 +565,11 @@ class eventTimeLine(object):
     k=final_dwell_time/math.log(2+end_index)
     for index in self.m_display_range:
       interval_endpoints.append(int(k*math.log(2+index)))
-    self.m_log_interval=self.computeIntervals(interval_endpoints)
-    
+      
+    log_interval=self.computeIntervals(interval_endpoints)
+    ruler=self.buildRuler(interval_endpoints)
+    self.m_interval_table.append([self.EVTSCALE_LOG, log_interval, ruler])
+
     '''
     polynomial interval
     '''
@@ -534,29 +579,64 @@ class eventTimeLine(object):
     k=final_dwell_time/(end_index**poly_power)
     for index in self.m_display_range:
       interval_endpoints.append(int(k*(index**poly_power)))
-    self.m_poly_interval=self.computeIntervals(interval_endpoints)
+      
+    poly_interval=self.computeIntervals(interval_endpoints)
+    ruler=self.buildRuler(interval_endpoints)
+    self.m_interval_table.append([self.EVTSCALE_ROOT, poly_interval, ruler])
     
     '''
     lense interval
+    --------------------------
+    # Y(x) = poly(x) = k (x-xmid)^n ; n=2 
+    #--------------------------------------------------
+    # Sum k * int(poly(x)) over (0, Xmax) == Smax
+    # 
+    #--------------------------------------------------
     '''
-    # on interval 0, Xmax
-    # y(u(0))=-Ymax ; y(u(X))=Ymax
-    # u(0)=- k*.999*pi/2; u(Xmax)= k*999*pi/2
-    #y=tan((pi/2)-kx)=tan(k(x-X/2); kX=pi/2;
-     
-  
-
-  def selectInterval(self, scale_type):
-    if scale_type==self.EVTSCALE_LINEAR:
-      return self.m_linear_interval
-    elif scale_type==self.EVTSCALE_EXP:
-      return self.m_exp_interval
-    elif scale_type==self.EVTSCALE_LOG:
-      return self.m_log_interval
-    else: #scale_type==self.EVTSCALE_POLY:
-      return self.m_poly_interval
     
-      
+    display_columns=self.m_max_display_column+1
+    poly_list=[]
+    
+    degree=2
+    
+    def polyInt(x):
+      p=math.fabs(math.pow((x-self.m_max_display_column/2),degree))
+      return int(0.5+p)
+    
+    def sumPolyInt(start, end):
+      poly_sum=0
+      for x in range(start, end):
+        poly_int=polyInt(x)
+        poly_list.append(poly_int)
+        poly_sum+=poly_int
+        
+      return poly_sum
+    
+    interval_endpoints=[]
+    k=self.m_max_sequence_number/sumPolyInt(0, self.m_max_display_column)
+    
+    for index in self.m_display_range:
+      endpoint=k*polyInt(index)
+      if index>0:
+        endpoint+=interval_endpoints[-1]
+      interval_endpoints.append(int(endpoint+.5))
+
+    lense_interval=self.computeIntervals(interval_endpoints)
+    ruler=self.buildRuler(interval_endpoints)
+    self.m_interval_table.append([self.EVTSCALE_LENSE, lense_interval, ruler])
+        
+  def selectInterval(self, scale_type):
+    entry=list(filter( lambda x:scale_type == x[0], self.m_interval_table))
+    return entry[0][1]
+  
+  def selectRuler(self, scale_type):
+    entry=list(filter( lambda x:scale_type == x[0], self.m_interval_table))
+    return entry[0][2]
+  
+  
+  def addOrigin(self):
+    self.addEvent(self.EVT_ORIGIN, None, 0)
+    
   def addEvent(self, event__type, event__mhz, sequence__number ):
     event=DisplayedEvent(  event_type=event__type,
                            event_mhz=event__mhz,
@@ -564,33 +644,58 @@ class eventTimeLine(object):
                            event_count=1)
     
     self.m_display_events.append(event)
-    self.m_display_buckets[0].append(event)
-    pass
+    self.m_event_buckets[0].append(event)
   
 
   
   '''
-  shiftEvents
+  ageEvents
       ... from timeline start towards timeline end
       move events to 'next' bucket when its age exceeds the bucket limit
       
   '''
 
 
+  
   def ageEvents(self, current_sequence_number, interval):
     
     for index in self.m_rev_display_range:
       prev_index=index-1
+      #TODO  ?is this next line OK?
       if prev_index<0:
         break
 
-      for evt_index in range(len(self.m_display_buckets[prev_index])):
-        event=self.m_display_buckets[prev_index][evt_index]
+      '''
+      assumption: items appended in sequence
+      promote events to next bucket as they 'age out'
+      promote from end of list toward beginning
+       - prevents out-of-range exception
+      stop promoting once an event is 'too young' to promote
+       - prevents wasting time and effort
+       - pleases users and saves the planet!!
+      '''
+      
+      for event in self.m_event_buckets[prev_index]:
         event_entry_time=event.sequence_number
         event_age=current_sequence_number-event_entry_time
         if event_age > interval[prev_index][1]:
-          pop_event=self.m_display_buckets[prev_index].pop(evt_index)
-          self.m_display_buckets[index].insert(0, pop_event)
+          #item will always be oldest, last one
+          pop_event=self.m_event_buckets[prev_index].pop(-1)
+          self.m_event_buckets[index].insert(0, pop_event)
+
+
+
+  '''
+  rotateIntervals()
+  ... the dataset is complete when this is used
+      each 'rotation' is a rotation of the display intervals.
+      events are populated into buckets corresponding to fixed display intervals.
+      rotating the non-linear intervals causes the displayed events to pack
+      more or less tightly together, as the interval metric is rotated.
+  '''
+  def rotateEvents(self, sequence_step, ):
+    
+    pass
 
   '''
   'lensing' event display metric
@@ -610,25 +715,121 @@ class eventTimeLine(object):
       if prev_index<0:
         break
 
-      for evt_index in range(len(self.m_display_buckets[prev_index])):
-        event=self.m_display_buckets[prev_index][evt_index]
+      for evt_index in range(len(self.m_event_buckets[prev_index])):
+        event=self.m_event_buckets[prev_index][evt_index]
         event_entry_time=event.sequence_number
         event_age=current_sequence_number-event_entry_time
         if event_age > interval[prev_index][1]:
-          pop_event=self.m_display_buckets[prev_index].pop(evt_index)
-          self.m_display_buckets[index].insert(0, pop_event)    
+          pop_event=self.m_event_buckets[prev_index].pop(evt_index)
+          self.m_event_buckets[index].insert(0, pop_event)    
     pass
   
     
-  def rotateInterval(self, steps, left_not_right, interval):
-    if left_not_right:
-      left_intervals=interval[steps:]
-      rotated_intervals=left_intervals+interval[:steps]
-    else:
-      right_intervals=interval[:-steps]
-      rotated_intervals=interval[-steps:]
+  '''
+  rotateDisplay
+      incrementally offset the event display with wrap-at-boundaries
+      method 1:
+        a. create a relative_intervals list
+        b. assign the sequence_start_number to the zeroeth interval of the list
+        c. evaluate the interval for each bucket as offsets from the
+        d. wrap the sequence numbering around the interval list boundaries 
+        c. populate a rotated_display_buckets iist with events
+        d.   display the events
+        e.   increment/decrement the sequence_number of interval 0
+        f.   promote events forwards/backwards per direction variable
+        g.   continue at d until break
+        
+  '''
+  '''
+  rotateInterval
+    scale_type              -  scale_type to be projected
+    origin_sequence_number  -  sequence_number aligned with scale origin
+    sequence_steps          -  sequence counts to rotate (+ = right; - = left)
+    pause                   -  ms to pause between steps
+  '''  
+  
+  def relativeInterval(self, intervals):
+    relative=[]
+    for bucket in intervals:
+      relative.append([0, bucket[1]-bucket[0]])
+    return relative
+  
+  '''
+  populateRelativeIntervals
+    intervals  -  a zero-origin interval set
+    
+        
+  '''
+  def populateOffsetIntervals(self, intervals, origin_sequence_number):
+    sequence_number_ptr=origin_sequence_number
+    
+    display_buckets=[[] for _ndx in range(self.m_display_range)]
+    display_bucket_count=self.m_max_display_column+1
+    
+    interval_index=0
+    interval_start=origin_sequence_number
 
-    return rotated_intervals
+    buckets = filter( self.m_event_buckets )
+    
+    # reorder events, starting with events at or
+    # just above origin_sequence_number
+    high_buckets = list(filter(lambda x: x.sequence_number >=origin_sequence_number, self.m_display_events)) 
+    low_buckets = list(filter(lambda x: x.sequence_number < origin_sequence_number, self.m_display_events))
+    events=high_events+low_events
+
+    # only one pass through events and intervals    
+    for interval_index in range(len(intervals)):
+      interval=intervals[interval_index]
+      
+      # computes bucket sequence number boundaries, wraps at max value
+      bucket_start=(interval_start+interval[0]) % self.m_max_sequence_number
+      bucket_end=(interval_start+interval[1]) % self.m_max_sequence_number
+
+      for event in events:
+        if ( event.sequence_number >= bucket_start
+             and bucket_end <= event.sequence_number ):
+              display_buckets[interval_index].append(event)
+        else:
+          break
+      
+      
+    # all display events are populated
+    return display_events
+    
+  def initializeIntervalRotation(self, scale_type, origin_sequence_number, sequence_steps, pause_seconds):
+    # get interval and data
+    interval_info=self.m_interval_table[scale_type]
+    # rotate the initial bucket distribution of the event data
+    # the interval buckets and ruler hash marks are unchanged
+    self.m_rotate_event_buckets=self.populateOffsetIntervals(interval_info[1], origin_sequence_number)
+    self.m_rotate_sequence_offset=0
+    self.m_rotate_sequence_steps=sequence_steps
+    self.m_rotate_pause_seconds=pause_seconds
+
+
+  def stepEventRotation(self):
+    self.rotateEvents()
+  
+    for display_pass in self.m_event_type_list:
+      event_symbol=str(self.m_event_type_symbol[self.m_event_type_list.index(display_pass)])
+      timeline=""
+          
+      for event_list in self.m_event_buckets:
+        count=0
+        if len(event_list) > 0:
+          for event in event_list:
+            if event.event_type==display_pass:
+              count+=1
+        if count==0:
+          sym_str=(" ")
+        elif count==1:
+          sym_str=event_symbol.lower()
+        else:
+          sym_str=event_symbol.upper()
+        timeline=timeline+sym_str
+        
+      print(timeline)    
+    pass
     
   def displayEvents(self, scale_type, current_sequence_number):
     interval=self.selectInterval(scale_type)
@@ -639,7 +840,7 @@ class eventTimeLine(object):
       event_symbol=str(self.m_event_type_symbol[self.m_event_type_list.index(display_pass)])
       timeline=""
           
-      for event_list in self.m_display_buckets:
+      for event_list in self.m_event_buckets:
         count=0
         if len(event_list) > 0:
           for event in event_list:
@@ -655,26 +856,32 @@ class eventTimeLine(object):
         
       print(timeline)
   
-
+    
+    
 randobj=Random()
-randobj.seed(0)
-timeline=eventTimeLine(120, 100000, eventTimeLine.EVTSCALE_ROOT)
+randobj.seed(3)
+display_events=180
+max_sequence_number=1000000
+event_scale=eventTimeLine.EVTSCALE_LINEAR
+timeline=eventTimeLine(display_events, max_sequence_number, event_scale)
 
-for sequence in range(100000):
-  rand_int=randobj.getrandbits(12)
+ruler=timeline.selectRuler(event_scale)
+
+for sequence in range(max_sequence_number*2):
+  rand_int=randobj.getrandbits(16)
   
   if rand_int==0:
     timeline.addEvent(eventTimeLine.EVT_LOWFREQ_1VAL, 15, sequence)
-  elif rand_int==1:
+  elif rand_int==32:
     timeline.addEvent(eventTimeLine.EVT_LOWFREQ_ERROR, 15, sequence)
-  elif rand_int==2:
+  elif rand_int==66:
     timeline.addEvent(eventTimeLine.EVT_PROMIRA_ERR, 15, sequence)
   
   if sequence % 10 == 0:
+    print(ruler)
+    timeline.displayEvents(event_scale, sequence)
     time.sleep(.001)
-    print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
-    timeline.displayEvents(eventTimeLine.EVTSCALE_EXP, sequence)
-  
+
       
 
   
