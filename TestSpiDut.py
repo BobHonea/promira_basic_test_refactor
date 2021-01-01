@@ -681,7 +681,7 @@ class promiraSpiTestApp(object):
     '''
     pre-select command controls / command set to be tested
     '''  
-    subtest_set       = [hispeed_control, read_hispeed_control, read_dual_control ]
+    subtest_set       = [ hispeed_control, read_hispeed_control, read_dual_control ]
     battery_commands  = []
     
     for subtest in subtest_set:
@@ -690,7 +690,8 @@ class promiraSpiTestApp(object):
 
 
     trial_monitor=self.testMonitor(self.CRITERIA_GENERAL, control.sufficient_command_tests_per_trial)
-    initHotKey("ctrl + alt + x")
+    #initHotKey("ctrl + shift + x")
+    initHotKey("x")
     
     while not scriptTermination() and not trial_monitor.testComplete() :
       '''
@@ -698,7 +699,7 @@ class promiraSpiTestApp(object):
       '''
   
 
-      # trial inner-loop
+      # trial inner-loopx
       config_set_monitor=self.testMonitor(self.CRITERIA_GENERAL, len(self.m_config_mgr.m_spi_config_list))
       config_list=self.m_config_mgr.m_spi_config_list
       for spi_parameters in config_list:
@@ -839,7 +840,8 @@ class promiraSpiTestApp(object):
               
         if config_set_monitor.failCriteriaMet():
           self.m_testutil.bufferDetailInfo("Break on Configuration Set Test Fail")    
-     
+          break
+        
       self.m_testutil.bufferDetailInfo("Configuration Looptest Complete!")
 
       if self.m_single_valued_failure>0:
